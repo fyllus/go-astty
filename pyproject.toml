@@ -8,7 +8,7 @@ version = "0.1.0-alpha"
 description = "A professional, modular wrapper for seamless synchronous and asynchronous command-line executions."
 readme = "README.md"
 authors = [
-    { name = "Your Name", email = "your.email@domain.com" }
+    { name = "Fyllus", email = "Fyllus@git.com" }
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
