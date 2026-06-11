@@ -26,4 +26,4 @@ dependencies = [
 license = { text = "MIT" }
 
 [tool.hatch.build.targets.wheel]
-packages = ["pytty"]
+packages = ["src/pytty"]
