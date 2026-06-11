@@ -1,10 +1,38 @@
+import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, List
+from typing import Any, Callable, List, TypeVar
 
 PIPE = subprocess.PIPE
 STDOUT = subprocess.STDOUT
 DEVNULL = subprocess.DEVNULL
+
+
+class AssignmentError(Exception):
+    """Exception raised for invalid property or attribute assignments."""
+    def __init__(self, case: str, obj: object, *expected: type) -> None:
+        expected_types = ", ".join(f"<{t.__name__}>" for t in expected)
+        self._cases = {
+            'none': f'Property/Attribute cannot be None: expected {expected_types}, got <{type(obj).__name__}>',
+            'unable': f'Unable to assign type <{type(obj).__name__}>: expected {expected_types}',
+            'invalid': f'Invalid Assignment: expected {expected_types}, cannot use <{type(obj).__name__}>'
+        }
+        super().__init__(self._cases.get(case, f"Unknown error case with type <{type(obj).__name__}>"))
+
+
+class TaskError(Exception):
+    """Exception raised for validation failures before task runtime execution."""
+    def __init__(self, flag: str, task: "_BaseTask") -> None:
+        self._cases = {
+            'empty': f'Unable to run empty task: {task}',
+            'invalid_command': f'Not found or unknown command {task.prog}'
+        }
+        super().__init__(self._cases.get(flag, f'Unknown error case with task {task}'))
+
+
+BaseTask = TypeVar('BaseTask', bound='_BaseTask')
+BasePiper = TypeVar('BasePiper', bound='_BasePiper')
+
 
 class _BasePiper:
     """Manage stream pipes, exit status, and execution context for a process."""
@@ -16,7 +44,7 @@ class _BasePiper:
 
     def __setitem__(self, name: str, value: Any) -> None:
         if not hasattr(self, name):
-            raise AttributeError()
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
         setattr(self, name, value)
 
     # ---------- class property -------------------
@@ -30,7 +58,7 @@ class _BasePiper:
     @stdout.setter
     def stdout(self, value: bytes | bytearray) -> None:
         if not isinstance(value, (bytes, bytearray)):
-            return
+            raise AssignmentError('invalid', value, bytes, bytearray)
         self.stdout.extend(value)
 
     @property
@@ -43,7 +71,7 @@ class _BasePiper:
     @stderr.setter
     def stderr(self, value: bytes | bytearray) -> None:
         if not isinstance(value, (bytes, bytearray)):
-            return
+            raise AssignmentError('invalid', value, bytes, bytearray)
         self.stderr.extend(value)
 
     @property
@@ -56,7 +84,7 @@ class _BasePiper:
     @returncode.setter
     def returncode(self, value: int) -> None:
         if not isinstance(value, int):
-            return
+            raise AssignmentError('unable', value, int)
         self._returncode = value
 
     @property
@@ -94,9 +122,9 @@ class _BasePiper:
     @path.setter
     def path(self, value: Path) -> None:
         if value is None:
-            return
+            raise AssignmentError('none', value, Path)
         if not isinstance(value, Path):
-            raise TypeError()
+            raise AssignmentError('unable', value, Path)
         setattr(self, '_path', value)
 
     @property
@@ -109,8 +137,9 @@ class _BasePiper:
     @shell.setter
     def shell(self, value: bool) -> None:
         if not isinstance(value, bool):
-            raise TypeError()
+            raise AssignmentError('unable', value, bool)
         setattr(self, '_shell', value)
+
 
 class _BaseTask(list):
     """Represent an executable command payload structure as an array of arguments."""
@@ -138,11 +167,17 @@ class _BaseTask(list):
         return self[1:]
 
     @property
-    def piper(self) -> _BasePiper:
+    def piper(self) -> Any:
         """Get the stream pipeline manager tied to this specific task execution context."""
         if not hasattr(self, '_piper'):
             setattr(self, '_piper', _BasePiper())
         return getattr(self, '_piper')
+
+    @piper.setter
+    def piper(self, value: Any) -> None:
+        if not isinstance(value, _BasePiper):
+            raise AssignmentError('unable', value, _BasePiper)
+        setattr(self, '_piper', value)
 
     @property
     def callback(self) -> Any:
@@ -152,18 +187,25 @@ class _BaseTask(list):
     @callback.setter
     def callback(self, value: Any) -> None:
         if not callable(value):
-            raise TypeError('Callback must be a <Callable>')
+            raise AssignmentError('invalid', value, Callable)
         setattr(self, '_callback', value)
 
     # --------------- main methods -------------------------------
     def append(self, value: str) -> None:
         """Append a safe string argument entry to the command vector."""
         if not isinstance(value, str):
-            raise TypeError()
+            raise ValueError('Value must be <str>')
         super().append(value)
 
     def extend(self, value: List[str]) -> None:
         """Extend the command argument payload using an array of string slices."""
         if not all(isinstance(arg_item, str) for arg_item in value):
-            raise TypeError()
+            raise ValueError('Value must be <List[str]>')
         super().extend(value)
+
+    def validation(self) -> None:
+        """Pre-Runtime validation gate to check structural faults before process boot."""
+        if not self:
+            raise TaskError('empty', self)
+        if not self.piper.shell and not shutil.which(self.prog):
+            raise TaskError('invalid_command', self)

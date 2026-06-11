@@ -1,22 +1,23 @@
+
 # pytty
 
 A professional, modular wrapper for seamless synchronous and asynchronous command-line executions in Python.
 
-`pytty` decouples process lifecycle management from standard I/O streams by introducing structured, data-driven pipelines. By abstracting `subprocess` and `asyncio` sub-processes into unified Task and Piper objects, it ensures predictable state management, stream encapsulation, and reusable execution contexts.
+`pytty` decouples process lifecycle management from standard I/O streams by introducing structured, data-driven pipelines. By abstracting execution payload contexts into self-contained Object vectors, it shifts execution responsibility from external engine hooks directly into individual Task runtimes.
 
 ## Architecture
 
-The framework splits execution into two clear components:
-* **Tasks (`_BaseTask`)**: Array-driven vectors that isolate the executable binary from its trailing argument context.
-* **Pipers (`_BasePiper`)**: Independent state containers that govern data streams (`stdin`, `stdout`, `stderr`), execution pathways, and return statuses.
+The framework splits execution into two unified, object-oriented components:
+* **Tasks (`_BaseTask`)**: Extended list containers acting as payload data vectors. They isolate the executable binary context, handle target system constraints via explicit pre-runtime structural gates (`validation`), and natively invoke their own execution cycles via `.run()`.
+* **Pipers (`_BasePiper`)**: Isolated state engines tied directly to specific task envelopes to capture and track operational boundaries (`stdin`, `stdout`, `stderr`, paths, and exit return codes).
 
 ---
 
 ## Features
 
-* **Dual Engine Layout**: Fully mirrored APIs for both synchronous blocking pipelines and asynchronous non-blocking event loops.
-* **State-Aware Stream Tracking**: Output metrics (`stdout`, `stderr`) are accumulated cleanly as mutable `bytearray` slices directly inside the execution envelope.
-* **Context Isolation**: Working paths, environment shells, and execution hooks are independent variables tied specifically to each task wrapper.
+* **Self-Contained Runtimes**: Tasks are no longer passive configuration blocks passed to functional routines; execution logic is encapsulated directly within the task objects (`task.run()`).
+* **Pre-Runtime Validation Gates**: Safe assertion tracks (`shutil.which`) evaluate process structure and binary integrity before booting processes to enforce immediate fail-fast mechanics.
+* **Dual Object Engine Layout**: Mirrored execution architectures separating blocking synchronous behaviors (`SyncTask`) and non-blocking asynchronous event routines (`AsyncTask`) cleanly under a predictable interface.
 
 ---
 
@@ -24,11 +25,20 @@ The framework splits execution into two clear components:
 
 To install directly from the source repository:
 
+Clone from Codeberg:
 ```bash
-git clone https://github.com/fyllus/pytty.git
+git clone [https://codeberg.org/fyllus/pytty.git](https://codeberg.org/fyllus/pytty.git)
+```
+
+Clone from Github:
+```bash
+git clone [https://github.com/fyllus/pytty.git](https://github.com/fyllus/pytty.git)
+```
+
+Install:
+```bash
 cd pytty
 pip install .
-
 ```
 
 ---
@@ -37,24 +47,22 @@ pip install .
 
 ### 1. Asynchronous Execution Pipeline
 
-Perfect for long-running CLI integrations, microservices, or network-bound streams requiring non-blocking chunk consumption.
+Perfect for long-running CLI integrations, microservices, or concurrent network-bound stream tracking.
 
 ```python
 import asyncio
 from pathlib import Path
-from pytty.async_engine import AsyncTask, shell
+from pytty import asyncrun
 
 async def main():
-    # Instantiate task with binary and safe argument arrays
-    task = AsyncTask("git", "log", "--oneline", "-n", "5")
-    
-    # Configure context through the task pipeline manager
+    # Instantiate asynchronous task with payload arguments
+    task = asyncrun.AsyncTask("git", "log", "--oneline", "-n", "5")
     task.piper.path = Path("/path/to/repo")
     
-    # Run the non-blocking engine
-    await shell(task)
+    # Fire the self-contained non-blocking runtime
+    await task.run()
     
-    # Extract structural metrics cleanly
+    # Evaluate context matrices safely
     if task.piper.returncode == 0:
         print(task.piper.stdout.decode("utf-8"))
     else:
@@ -67,19 +75,19 @@ if __name__ == "__main__":
 
 ### 2. Synchronous Execution Pipeline
 
-Ideal for scripting, automation utilities, or linear operations where downstream computations strictly depend on immediate sequential process finalization.
+Ideal for local scripts, standard automation sequences, or linear operational pipelines.
 
 ```python
 from pathlib import Path
-from pytty.sync_engine import SyncTask, shell
+from pytty import syncrun
 
 def run_backup():
-    # Initialize task structures sequentially
-    task = SyncTask("tar", "-czf", "backup.tar.gz", "src/")
+    # Build standard array configuration payload
+    task = syncrun.SyncTask("tar", "-czf", "backup.tar.gz", "src/")
     task.piper.path = Path.cwd()
     
-    # Execute through the blocking runtime engine
-    shell(task)
+    # Invoke execution directly from the task payload instance
+    task.run()
     
     print(f"Process finalized with code: {task.piper.returncode}")
 
@@ -96,20 +104,18 @@ if __name__ == "__main__":
 
 #### `_BasePiper`
 
-The logical tracking layer for state boundaries.
+The logical data matrix tracking standard streams and execution boundaries.
 
-* `stdout` / `stderr`: Automatic validation and expansion of incoming `bytes` or `bytearray` buffers.
-* `returncode`: Tracks the precise exit state integer.
-* `path`: Extends native `pathlib.Path` structures for strict directory containment.
+* `stdout` / `stderr`: Automatic validation and mutation of incremental stream chunks (`bytearray`).
+* `returncode`: Tracking vector for process termination status.
+* `path`: Explicit execution context location directory (`pathlib.Path`).
+* `shell`: Evaluates whether execution requires a target environment shell gateway.
 
 #### `_BaseTask(list)`
 
-An extended list structure designed for strict argument indexing.
+An extended list structure executing process payload vectors.
 
-* `prog`: Tracks the execution binary (always index `[0]`).
-* `args`: Slices away arguments safely (always slices `[1:]`).
-* `callback`: Safe validator for processing completion triggers.
-
-```
-
-```
+* `prog`: Tracks the execution binary anchor context (`self[0]`).
+* `args`: Slices away argument payloads safely (`self[1:]`).
+* `validation()` / `validation`: Evaluates process layout constraints and structural target command existence before booting.
+* `run(*args, kwargs)`: Abstract gateway implemented by runtime engines to drive process setups natively.

@@ -1,4 +1,5 @@
-import subprocess as sp
+from subprocess import run as shell
+from typing import Any
 
 from . import base
 
@@ -21,34 +22,29 @@ class SyncTask(base._BaseTask):
             setattr(self, '_piper', SyncPiper())
         return getattr(self, '_piper')
 
-def shell(task: SyncTask, **kwargs) -> None:
-    """Execute a SyncTask synchronously using either array vectors or raw string commands."""
-    if not task:
-        return
+    def run(self, stdin: Any = None, **kwargs: Any) -> None:
+        """Execute a SyncTask synchronously using either shell or executive sub-processes."""
+        self.validation()
 
-    if not task.piper.shell:
-        cmd = [task.prog] + task.args
-        process = sp.run(
-            cmd,
-            stdin=task.piper.stdin_pipe,
-            stderr=task.piper.stderr_pipe,
-            stdout=task.piper.stdout_pipe,
-            cwd=task.piper.path,
-            shell=task.piper.shell,
-            **kwargs
-        )
-    else:
-        cmd_str = ' '.join(task)
-        process = sp.run(
-            cmd_str,
-            stdin=task.piper.stdin_pipe,
-            stderr=task.piper.stderr_pipe,
-            stdout=task.piper.stdout_pipe,
-            cwd=task.piper.path,
-            shell=task.piper.shell,
-            **kwargs
-        )
+        if stdin is not None:
+            self.piper.stdin_pipe = stdin
 
-    task.piper.stdout = process.stdout
-    task.piper.stderr = process.stderr
-    task.piper.returncode = process.returncode
+        kwargs.setdefault('stdin', self.piper.stdin_pipe)
+        kwargs.setdefault('stdout', self.piper.stdout_pipe)
+        kwargs.setdefault('stderr', self.piper.stderr_pipe)
+        kwargs.setdefault('cwd', self.piper.path)
+        kwargs.setdefault('shell', self.piper.shell)
+
+        if not self.piper.shell:
+            cmd = list(self)
+            process = shell(cmd, **kwargs)
+        else:
+            cmd_str = ' '.join(self)
+            process = shell(cmd_str, **kwargs)
+
+        if process.stdout is not None:
+            self.piper.stdout = process.stdout
+        if process.stderr is not None:
+            self.piper.stderr = process.stderr
+
+        self.piper.returncode = process.returncode

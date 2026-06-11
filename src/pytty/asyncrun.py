@@ -1,4 +1,7 @@
 import asyncio
+from asyncio import create_subprocess_exec as async_exec
+from asyncio import create_subprocess_shell as async_shell
+from typing import Any
 
 from . import base
 
@@ -41,36 +44,29 @@ class AsyncTask(base._BaseTask):
             setattr(self, '_piper', AsyncPiper())
         return getattr(self, '_piper')
 
-async def shell(task: AsyncTask, **kwargs) -> None:
-    """Execute an AsyncTask asynchronously using either shell or executive sub-processes."""
-    if not task:
-        return
+    async def run(self, stdin: Any = None, **kwargs: Any) -> None:
+        """Execute an AsyncTask asynchronously using either shell or executive sub-processes."""
+        self.validation()
 
-    if task.piper.shell:
-        cmd_str = " ".join([task.prog] + task.args)
-        process = await asyncio.create_subprocess_shell(
-            cmd_str,
-            stdin=task.piper.stdin_pipe,
-            stdout=task.piper.stdout_pipe,
-            stderr=task.piper.stderr_pipe,
-            cwd=task.piper.path,
-            **kwargs
-        )
-    else:
-        process = await asyncio.create_subprocess_exec(
-            task.prog, *task.args,
-            stdin=task.piper.stdin_pipe,
-            stdout=task.piper.stdout_pipe,
-            stderr=task.piper.stderr_pipe,
-            cwd=task.piper.path,
-            **kwargs
+        if stdin is not None:
+            self.piper.stdin_pipe = stdin
+
+        kwargs.setdefault('stdin', self.piper.stdin_pipe)
+        kwargs.setdefault('stdout', self.piper.stdout_pipe)
+        kwargs.setdefault('stderr', self.piper.stderr_pipe)
+        kwargs.setdefault('cwd', self.piper.path)
+
+        if self.piper.shell:
+            cmd_str = " ".join(self)
+            process = await async_shell(cmd_str, **kwargs)
+        else:
+            process = await async_exec(self.prog, *self.args, **kwargs)
+
+        await asyncio.gather(
+            self.piper.stream_stdout(process.stdout),
+            self.piper.stream_stderr(process.stderr)
         )
 
-    await asyncio.gather(
-        task.piper.stream_stdout(process.stdout),
-        task.piper.stream_stderr(process.stderr)
-    )
-
-    await process.wait()
-    if isinstance(process.returncode, int):
-        task.piper.returncode = process.returncode
+        await process.wait()
+        if process.returncode is not None:
+            self.piper.returncode = process.returncode
