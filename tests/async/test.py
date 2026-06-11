@@ -1,8 +1,7 @@
 import asyncio
-from itertools import count
 from pathlib import Path
 
-from pytty import asyncrun
+from goastty import asyncrun
 
 
 async def main(c: int = 5) -> None:

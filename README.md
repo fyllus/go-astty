@@ -1,13 +1,13 @@
+# go-astty
 
-# pytty
+`go-astty` or `Gate of Asyncronous and Syncronous TTY`, is a modular process orchestration gate for seamless synchronous and asynchronous command-line executions in Python.
 
-A professional, modular wrapper for seamless synchronous and asynchronous command-line executions in Python.
-
-`pytty` decouples process lifecycle management from standard I/O streams by introducing structured, data-driven pipelines. By abstracting execution payload contexts into self-contained Object vectors, it shifts execution responsibility from external engine hooks directly into individual Task runtimes.
+`go-astty` decouples process lifecycle management from standard I/O streams by introducing structured, data-driven pipelines. By abstracting execution payload contexts into self-contained Object vectors, it shifts execution responsibility from external engine hooks directly into individual Task runtimes.
 
 ## Architecture
 
 The framework splits execution into two unified, object-oriented components:
+
 * **Tasks (`_BaseTask`)**: Extended list containers acting as payload data vectors. They isolate the executable binary context, handle target system constraints via explicit pre-runtime structural gates (`validation`), and natively invoke their own execution cycles via `.run()`.
 * **Pipers (`_BasePiper`)**: Isolated state engines tied directly to specific task envelopes to capture and track operational boundaries (`stdin`, `stdout`, `stderr`, paths, and exit return codes).
 
@@ -17,7 +17,7 @@ The framework splits execution into two unified, object-oriented components:
 
 * **Self-Contained Runtimes**: Tasks are no longer passive configuration blocks passed to functional routines; execution logic is encapsulated directly within the task objects (`task.run()`).
 * **Pre-Runtime Validation Gates**: Safe assertion tracks (`shutil.which`) evaluate process structure and binary integrity before booting processes to enforce immediate fail-fast mechanics.
-* **Dual Object Engine Layout**: Mirrored execution architectures separating blocking synchronous behaviors (`SyncTask`) and non-blocking asynchronous event routines (`AsyncTask`) cleanly under a predictable interface.
+* **Dual Object Engine Layout**: Mirrored execution architectures separating blocking synchronous behaviors (`syncrun.SyncTask`) and non-blocking asynchronous event routines (`asyncrun.AsyncTask`) cleanly under a predictable interface.
 
 ---
 
@@ -25,20 +25,26 @@ The framework splits execution into two unified, object-oriented components:
 
 To install directly from the source repository:
 
-Clone from Codeberg:
+**Clone from Codeberg:**
+
 ```bash
-git clone [https://codeberg.org/fyllus/pytty.git](https://codeberg.org/fyllus/pytty.git)
+git clone https://codeberg.org/Fyllus/go-astty.git
+
 ```
 
-Clone from Github:
+**Clone from GitHub:**
+
 ```bash
-git clone [https://github.com/fyllus/pytty.git](https://github.com/fyllus/pytty.git)
+git clone https://github.com/fyllus/go-astty.git
+
 ```
 
-Install:
+**Install:**
+
 ```bash
-cd pytty
+cd goastty
 pip install .
+
 ```
 
 ---
@@ -52,12 +58,12 @@ Perfect for long-running CLI integrations, microservices, or concurrent network-
 ```python
 import asyncio
 from pathlib import Path
-from pytty import asyncrun
+from goastty import asyncrun
 
 async def main():
     # Instantiate asynchronous task with payload arguments
-    task = asyncrun.AsyncTask("git", "log", "--oneline", "-n", "5")
-    task.piper.path = Path("/path/to/repo")
+    task = asyncrun.AsyncTask("ping", "-c", "5", "google.com")
+    task.piper.path = Path.home()
     
     # Fire the self-contained non-blocking runtime
     await task.run()
@@ -79,7 +85,7 @@ Ideal for local scripts, standard automation sequences, or linear operational pi
 
 ```python
 from pathlib import Path
-from pytty import syncrun
+from goastty import syncrun
 
 def run_backup():
     # Build standard array configuration payload
@@ -117,5 +123,5 @@ An extended list structure executing process payload vectors.
 
 * `prog`: Tracks the execution binary anchor context (`self[0]`).
 * `args`: Slices away argument payloads safely (`self[1:]`).
-* `validation()` / `validation`: Evaluates process layout constraints and structural target command existence before booting.
-* `run(*args, kwargs)`: Abstract gateway implemented by runtime engines to drive process setups natively.
+* `validation()`: Evaluates process layout constraints and structural target command existence before booting.
+* `run(stdin=None, kwargs)`: Abstract gateway implemented by runtime engines to drive process setups natively.

@@ -2,7 +2,7 @@ import threading
 import time
 from pathlib import Path
 
-from pytty import syncrun
+from goastty import syncrun
 
 
 def main(c: int=5) -> None:

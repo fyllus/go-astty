@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pytty"
-version = "0.1.0-alpha"
-description = "A professional, modular wrapper for seamless synchronous and asynchronous command-line executions."
+name = "go-astty"
+version = "0.1.0-a"
+description = "go-astty is modular process orchestration gate for seamless synchronous and asynchronous command-line executions in Python."
 readme = "README.md"
 authors = [
     { name = "Fyllus", email = "Fyllus@git.com" }
@@ -25,5 +25,9 @@ dependencies = [
 ]
 license = { text = "MIT" }
 
+[project.urls]
+Codeberg = "https://codeberg.org/Fyllus/go-astty"
+Github = "https://github.com/Fyllus/go-astty"
+
 [tool.hatch.build.targets.wheel]
-packages = ["src/pytty"]
+packages = ["src/goastty"]
