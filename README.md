@@ -1,4 +1,3 @@
-```markdown
 # pytty
 
 A professional, modular wrapper for seamless synchronous and asynchronous command-line executions in Python.
