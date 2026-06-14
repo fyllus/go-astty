@@ -1,50 +1,37 @@
-from subprocess import run as shell
-from typing import Any
+from goastty.api import (
+    Execution,
+    close,
+    fork,
+    is_nt,
+    is_posix,
+    pipe,
+    waitpid,
+)
 
-from . import base
+if is_nt:
+    from goastty.api import W_INFINITE
 
+class SyncTask(Execution):
+    """Synchronous subprocess execution runtime engine."""
 
-class SyncPiper(base._BasePiper):
-    """Synchronous stream reader and state manager for running sub-processes."""
-    def __init__(self) -> None:
-        super().__init__()
+    def run(self, use_path: bool = False, env: dict | None = None, is_vec: bool = False) -> None:
+        """Execute the task payload through a blocking, native OS workflow.
 
+        Orchestrates pipeline generation, process spawning via fork/CreateProcess,
+        and synchronous stream reading loops before harvesting the exit status.
+        """
+        if is_posix:
+            self.reader, self.writer = pipe()
+            _, _, self.pid, _ = fork()
+            if self.pid == 0:
+                self._child_side(use_path, env, is_vec)
+            else:
+                close(self.writer)
+                self._chunk_read()
+                waitpid(self.pid, 0)
 
-class SyncTask(base._BaseTask):
-    """Synchronous executable command vector managing a SyncPiper context."""
-    def __init__(self, *args: str) -> None:
-        super().__init__(*args)
-
-    @property
-    def piper(self) -> SyncPiper:
-        """Get or initialize the synchronous stream pipeline manager instance."""
-        if not hasattr(self, '_piper'):
-            setattr(self, '_piper', SyncPiper())
-        return getattr(self, '_piper')
-
-    def run(self, stdin: Any = None, **kwargs: Any) -> None:
-        """Execute a SyncTask synchronously using either shell or executive sub-processes."""
-        self.validation()
-
-        if stdin is not None:
-            self.piper.stdin_pipe = stdin
-
-        kwargs.setdefault('stdin', self.piper.stdin_pipe)
-        kwargs.setdefault('stdout', self.piper.stdout_pipe)
-        kwargs.setdefault('stderr', self.piper.stderr_pipe)
-        kwargs.setdefault('cwd', self.piper.path)
-        kwargs.setdefault('shell', self.piper.shell)
-
-        if not self.piper.shell:
-            cmd = list(self)
-            process = shell(cmd, **kwargs)
-        else:
-            cmd_str = ' '.join(self)
-            process = shell(cmd_str, **kwargs)
-
-        if process.stdout is not None:
-            self.piper.stdout = process.stdout
-        if process.stderr is not None:
-            self.piper.stderr = process.stderr
-
-        self.piper.returncode = process.returncode
+        elif is_nt:
+            self._setup_nt_pipeline()
+            self._chunk_read()
+            waitpid(self.handle, W_INFINITE)
+            close(self.handle)

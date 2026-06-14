@@ -1,26 +1,31 @@
-# go-astty
+# Go-astty
 
-`go-astty` or `Gate of Asyncronous and Syncronous TTY`, is a modular process orchestration gate for seamless synchronous and asynchronous command-line executions in Python.
+Version: `0.2.0-a`
 
-`go-astty` decouples process lifecycle management from standard I/O streams by introducing structured, data-driven pipelines. By abstracting execution payload contexts into self-contained Object vectors, it shifts execution responsibility from external engine hooks directly into individual Task runtimes.
+`go-astty` (Gate of Asynchronous and Synchronous TTY) is a modular, low-level process orchestration gate for seamless synchronous and asynchronous command-line executions in Python, featuring native cross-platform support (POSIX/Windows NT).
+
+The framework decouples process lifecycle management from standard I/O streams by introducing structured, data-driven pipelines, shifting execution responsibility into dedicated execution runtimes.
+
+---
+
+## Project Status & Vision
+
+This project is currently undergoing active structural optimization and architectural refinement. The primary objective is to evaluate alternative, highly efficient approaches for process spawning and I/O multiplexing.
+
+Instead of relying on high-level standard abstractions, the focus is to map directly to the lowest possible native subsystem layers for both Windows NT (`_winapi` / `kernel32`) and POSIX (`os.fork` / `os.exec`), achieving maximum raw performance and minimal execution overhead.
+
+---
 
 ## Architecture
 
-The framework splits execution into two unified, object-oriented components:
+The ecosystem splits execution into two lean, objective components:
 
-* **Tasks (`_BaseTask`)**: Extended list containers acting as payload data vectors. They isolate the executable binary context, handle target system constraints via explicit pre-runtime structural gates (`validation`), and natively invoke their own execution cycles via `.run()`.
-* **Pipers (`_BasePiper`)**: Isolated state engines tied directly to specific task envelopes to capture and track operational boundaries (`stdin`, `stdout`, `stderr`, paths, and exit return codes).
-
----
-
-## Features
-
-* **Self-Contained Runtimes**: Tasks are no longer passive configuration blocks passed to functional routines; execution logic is encapsulated directly within the task objects (`task.run()`).
-* **Pre-Runtime Validation Gates**: Safe assertion tracks (`shutil.which`) evaluate process structure and binary integrity before booting processes to enforce immediate fail-fast mechanics.
-* **Dual Object Engine Layout**: Mirrored execution architectures separating blocking synchronous behaviors (`syncrun.SyncTask`) and non-blocking asynchronous event routines (`asyncrun.AsyncTask`) cleanly under a predictable interface.
+* **Task (`Task`)**: An extended list container acting as the payload data vector. It isolates the executable binary context (`program`, `args`) and acts as the direct target for cumulative stream output buffers (`stdout` and `stderr` as `bytearray`).
+* **Execution (`Execution`)**: The isolated state engine tied to a specific task instance to capture, track, and manage low-level native descriptors (`pipe`, `fork`, `waitpid`, `ReadFile`/`os.read`). It branches into two specialized runtime engines:
+* `syncrun.SyncTask`: Drives linear, blocking synchronous workflows using native syscalls.
+* `asyncrun.AsyncTask`: Drives non-blocking, cooperative event-loop routines using `asyncio`.
 
 ---
-
 ## Installation
 
 To install directly from the source repository:
@@ -42,7 +47,7 @@ git clone https://github.com/fyllus/go-astty.git
 **Install:**
 
 ```bash
-cd goastty
+cd go-astty
 pip install .
 
 ```
@@ -51,54 +56,56 @@ pip install .
 
 ## Usage Guide
 
-### 1. Asynchronous Execution Pipeline
+### 1. Asynchronous Execution Pipeline (`AsyncTask`)
 
-Perfect for long-running CLI integrations, microservices, or concurrent network-bound stream tracking.
+Perfect for long-running CLI integrations, concurrent network-bound stream tracking, or real-time execution without halting the asyncio event loop.
 
 ```python
 import asyncio
-from pathlib import Path
-from goastty import asyncrun
+from goastty.api import Task
+from goastty.asyncrun import AsyncTask
 
 async def main():
-    # Instantiate asynchronous task with payload arguments
-    task = asyncrun.AsyncTask("ping", "-c", "5", "google.com")
-    task.piper.path = Path.home()
+    # Instantiate argument payload vector
+    task = Task("ping", "-c", "5", "google.com")
+    
+    # Bind payload context to the async execution engine
+    runner = AsyncTask(task)
     
     # Fire the self-contained non-blocking runtime
-    await task.run()
+    await runner.run(use_path=True)
     
-    # Evaluate context matrices safely
-    if task.piper.returncode == 0:
-        print(task.piper.stdout.decode("utf-8"))
-    else:
-        print(f"Error: {task.piper.stderr.decode('utf-8')}")
+    # Consume output buffers directly from the task payload instance
+    print(task.stdout.decode("utf-8"))
 
 if __name__ == "__main__":
     asyncio.run(main())
 
 ```
 
-### 2. Synchronous Execution Pipeline
+### 2. Synchronous Execution Pipeline (`SyncTask`)
 
 Ideal for local scripts, standard automation sequences, or linear operational pipelines.
 
 ```python
-from pathlib import Path
-from goastty import syncrun
+from goastty.api import Task
+from goastty.syncrun import SyncTask
 
-def run_backup():
-    # Build standard array configuration payload
-    task = syncrun.SyncTask("tar", "-czf", "backup.tar.gz", "src/")
-    task.piper.path = Path.cwd()
+def main():
+    # Build array configuration payload
+    task = Task("tar", "-czf", "backup.tar.gz", "src/")
     
-    # Invoke execution directly from the task payload instance
-    task.run()
+    # Bind payload context to the blocking sync engine
+    runner = SyncTask(task)
     
-    print(f"Process finalized with code: {task.piper.returncode}")
+    # Invoke execution directly
+    runner.run(use_path=True, is_vec=True)
+    
+    if len(task.stderr) > 0:
+        print(f"Errors captured: {task.stderr.decode('utf-8')}")
 
 if __name__ == "__main__":
-    run_backup()
+    main()
 
 ```
 
@@ -106,22 +113,31 @@ if __name__ == "__main__":
 
 ## API Specification
 
-### Core Classes
+> [!NOTE]
+> For a comprehensive breakdown of low-level OS primitives, internal variables, structures, and native syscall wrappers, consult the separate [API Documentation](docs/API.md).
 
-#### `_BasePiper`
+### `Task(list)`
 
-The logical data matrix tracking standard streams and execution boundaries.
+An extended list structure holding process data payloads and stream buffers.
 
-* `stdout` / `stderr`: Automatic validation and mutation of incremental stream chunks (`bytearray`).
-* `returncode`: Tracking vector for process termination status.
-* `path`: Explicit execution context location directory (`pathlib.Path`).
-* `shell`: Evaluates whether execution requires a target environment shell gateway.
+* **Properties**:
+* `program` (`str`): Extracts the root binary target anchor (`self[0]`).
+* `args` (`list[str]`): Complete sequence of parameter arguments.
+* `stdout` (`bytearray`): Cumulative output stream buffer.
+* `stderr` (`bytearray`): Cumulative error stream buffer.
 
-#### `_BaseTask(list)`
 
-An extended list structure executing process payload vectors.
 
-* `prog`: Tracks the execution binary anchor context (`self[0]`).
-* `args`: Slices away argument payloads safely (`self[1:]`).
-* `validation()`: Evaluates process layout constraints and structural target command existence before booting.
-* `run(stdin=None, kwargs)`: Abstract gateway implemented by runtime engines to drive process setups natively.
+### `_BaseExecution` (Abstract Class)
+
+Low-level state controller managing OS-specific subsystem resource descriptors.
+
+* **Properties / Attributes**:
+* `pid` (`int`): Active system-level tracking process identifier.
+* `handle` (`int`): Active win32 process tracking handle (Windows NT only).
+* `reader` (`int`): Pipeline outbound reading descriptor.
+* `writer` (`int`): Pipeline inbound writing descriptor.
+
+
+* **Methods**:
+* `run(use_path: bool, env: dict | None, is_vec: bool)`: Abstract gateway implemented by runtime engines to drive native lifecycle setups.
