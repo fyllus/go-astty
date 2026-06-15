@@ -3,6 +3,7 @@ import ctypes
 import os
 import sys
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any
 
 is_nt = os.name == 'nt'
@@ -79,7 +80,8 @@ if is_nt:
             lpAttributeList: dict[str, Any] | None = None
         ) -> None:
             super().__init__()
-            self["dwFlags"] = dwFlags
+            # Vincula dwFlags explicitamente se handles customizados forem passados
+            self["dwFlags"] = dwFlags | (_winapi.STARTF_USESTDHANDLES if (hStdInput or hStdOutput or hStdError) else 0)
             self["hStdInput"] = hStdInput if hStdInput is not None else _winapi.GetStdHandle(_winapi.STD_INPUT_HANDLE)
             self["hStdOutput"] = hStdOutput if hStdOutput is not None else _winapi.GetStdHandle(_winapi.STD_OUTPUT_HANDLE)
             self["hStdError"] = hStdError if hStdError is not None else _winapi.GetStdHandle(_winapi.STD_ERROR_HANDLE)
@@ -108,9 +110,15 @@ def close(handle_or_fd: int | None) -> None:
     """Close native subsystem resource descriptor"""
     if handle_or_fd is not None and handle_or_fd != -1:
         if is_nt:
-            _winapi.CloseHandle(handle_or_fd)
+            try:
+                _winapi.CloseHandle(handle_or_fd)
+            except OSError:
+                pass
         else:
-            os.close(handle_or_fd)
+            try:
+                os.close(handle_or_fd)
+            except OSError:
+                pass
 
 def fork(param: ProcessParam | None = None) -> tuple[int | None, int | None, int, Any]:
     """Execute target execution lifecycle division"""
@@ -129,7 +137,7 @@ def waitpid(pid_or_handle: int, options: int = 0) -> tuple[int, int]:
     if is_nt:
         timeout = 0 if options == 1 else _winapi.INFINITE
         if _winapi.WaitForSingleObject(pid_or_handle, timeout) == _winapi.WAIT_OBJECT_0:
-            return pid_or_handle, 0
+            return pid_or_handle, _winapi.GetExitCodeProcess(pid_or_handle)
         return 0, 0
     try:
         return os.waitpid(pid_or_handle, options)
@@ -152,7 +160,6 @@ def predirect(handle_or_fd: int) -> Any:
         try:
             os.dup2(handle_or_fd, 1)
             os.dup2(handle_or_fd, 2)
-            os.close(handle_or_fd)
             return True, None
         except Exception as err:
             return False, err
@@ -180,7 +187,14 @@ def args_to_command(*args: str):
 def try_to_execute(func, *args):
     """Execute target function catching runtime failures"""
     try:
-        func(*args)
+        # Gararante desempacotamento de tuplas de argumentos para as funções os.exec
+        if func.__name__.startswith('exec') and isinstance(args[1], list):
+            if len(args) == 3:
+                func(args[0], args[1], args[2])
+            else:
+                func(args[0], args[1])
+        else:
+            func(*args)
         return True, None
     except Exception as err:
         return False, err
@@ -200,21 +214,27 @@ class Task(list):
         """Initialize core argument list payload"""
         if len(args) == 0:
             raise ValueError('Empty task is not allowed')
-        super().__init__([simple_type_check(arg, str) for arg in args])
+        super().__init__(self._build_(*args))
 
     # ============== getters ==================
 
     @property
     def program(self) -> str:
         """Root binary target path"""
-        p, a = args_to_command(*self)
-        return '' if not p else p
+        return self[0]
 
     @property
     def args(self) -> list[str]:
         """Complete parameter argument sequence"""
-        p, a = args_to_command(*self)
-        return [''] if not p else self
+        return list(self)
+
+    @property
+    def environ(self) -> dict | None:
+        return getattr(self, '_env', None)
+
+    @property
+    def use_path(self) -> bool:
+        return getattr(self, '_use_path', True)
 
     @property
     def stdout(self) -> bytearray:
@@ -249,6 +269,27 @@ class Task(list):
             setattr(self, '_stdout', value)
         else:
             self._stdout.extend(value)
+
+    @environ.setter
+    def environ(self, value: dict) -> None:
+        simple_type_check(value, dict)
+        setattr(self, '_env', value)
+
+    @use_path.setter
+    def use_path(self, value: bool) -> None:
+        simple_type_check(value, bool)
+        setattr(self, '_use_path', value)
+
+    # ============ internal methods ==========
+    def _build_(self, *args) -> list[str]:
+        _args = []
+        self.use_path = not isinstance(args[0], Path)
+        if not self.use_path:
+            _args.append(str(args[0]))
+            _args.extend(list(args[1:]))
+        else:
+            _args.extend(list(args))
+        return [simple_type_check(a, str) for a in _args]
 
 
 class _BaseExecution(ABC):
@@ -342,14 +383,19 @@ if is_nt:
         def _setup_nt_pipeline(self) -> None:
             """Execute atomic win32 process spawning architecture"""
             self.reader, self.writer = pipe()
+
+            # torna o handle de escrita herdável pelo filho
+            duplicate(self.writer, inheritable=True)
             _, packet = predirect(self.writer)
+
+            # o handle de leitura NÃO deve ser herdado pelo processo filho
             duplicate(self.reader, inheritable=False)
 
             cmd_line = " ".join(f'"{arg}"' if " " in arg else arg for arg in self.task)
             _hp, _ht, _pid, _ = fork(param=ProcessParam(command_line=cmd_line, startup_info=packet))
 
             close(_ht)
-            close(self.writer)
+            close(self.writer)  # fecha o do pai para permitir o EOF nativo na leitura
             self.handle = _hp
             self.pid = _pid
 else:
@@ -360,24 +406,32 @@ else:
         """POSIX abstraction base layer"""
 
         # ==================== posix methods =========================
-
-        def _try_exec(self, use_path: bool, env: dict | None, is_vec: bool):
+        # preciso melhorar
+        def _try_exec(self, is_vec: bool = True):
             """Internal selector for os exec flavor execution"""
-            func_name = 'exec' + ('v' if is_vec else 'l') + ('p' if use_path else '') + ('e' if env else '')
+            func_name = 'exec' + ('v' if is_vec else 'l')
+            func_name += ('p' if self.task.use_path else '')
+            func_name += ('e' if isinstance(self.task.environ, dict) else '')
             func_call = getattr(os, func_name)
+
             if is_vec:
-                if env:
-                    return try_to_execute(func_call, self.task.program, self.task.args, env)
+                if self.task.use_path:
+                    if self.task.environ:
+                        return try_to_execute(func_call, self.task.program, self.task.args, self.task.environ)
+                    return try_to_execute(func_call, self.task.program, self.task.args)
                 return try_to_execute(func_call, self.task.program, self.task.args)
             else:
-                if env:
-                    return try_to_execute(func_call, self.task.program, *self.task.args, env)
+                if self.task.use_path:
+                    if self.task.environ:
+                        return try_to_execute(func_call, self.task.program, *self.task.args, self.task.environ)
+                    return try_to_execute(func_call, self.task.program, *self.task.args)
                 return try_to_execute(func_call, self.task.program, *self.task.args)
 
-        def _child_side(self, use_path: bool, env: dict | None, is_vec: bool) -> None:
+        def _child_side(self, is_vec: bool) -> None:
             """Execute post-fork targeted child processing routine"""
             close(self.reader)
             predirect(self.writer)
-            exec_is_ok, exec_error = self._try_exec(use_path, env, is_vec)
+            close(self.writer)
+            exec_is_ok, exec_error = self._try_exec(is_vec)
             if not exec_is_ok:
                 sys.exit(127 if isinstance(exec_error, FileNotFoundError) else 1)

@@ -15,13 +15,13 @@ def main(c: int = 5) -> None:
     print({"status": "starting", "command": list(task)})
 
     # Dispatch the blocking execution thread to decouple I/O boundary tracking
-    worker_thread = threading.Thread(target=runner.run, kwargs={"use_path": True})
+    worker_thread = threading.Thread(target=runner.run, kwargs={'is_vec': True})
     worker_thread.start()
 
     # Core main loop monitors the state engine without stopping the thread runtime
     while worker_thread.is_alive():
-        print("[Sync Engine] Processing execution pipeline... task locked in worker thread.")
-        time.sleep(0.5)
+        print("[Sync Engine] Processing execution pipeline... task running.")
+        time.sleep(0.1)  # <- CRÍTICO: Libera o GIL e alivia a CPU para a thread ler os bytes
 
     worker_thread.join()
 

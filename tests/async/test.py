@@ -1,4 +1,5 @@
 import asyncio
+import subprocess
 
 from goastty.api import Task
 from goastty.asyncrun import AsyncTask
@@ -14,7 +15,7 @@ async def main(c: int = 5) -> None:
     print({"status": "starting", "command": list(task)})
 
     # Dispatch the execution coroutine to the background event loop
-    run_task = asyncio.create_task(runner.run(use_path=True))
+    run_task = asyncio.create_task(runner.run(True))
 
     # Monitor engine execution while the background task is processing
     while not run_task.done():

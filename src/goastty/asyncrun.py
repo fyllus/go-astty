@@ -16,7 +16,7 @@ if is_posix:
 class AsyncTask(Execution):
     """Asynchronous subprocess execution runtime engine."""
 
-    async def run(self, use_path: bool = False, env: dict | None = None, is_vec: bool = False) -> None:
+    async def run(self, is_vec: bool = False) -> None:
         """Execute the task payload through a non-blocking, cooperative workflow.
 
         Orchestrates pipeline generation, asynchronous stream processing loops,
@@ -26,7 +26,7 @@ class AsyncTask(Execution):
             self.reader, self.writer = pipe()
             _, _, self.pid, _ = fork()
             if self.pid == 0:
-                self._child_side(use_path, env, is_vec)
+                self._child_side(is_vec)
             else:
                 close(self.writer)
                 await self._chunk_read_async()
