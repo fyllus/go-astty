@@ -28,8 +28,8 @@ class AsyncTask(Execution):
             if self.pid == 0:
                 self._child_side(is_vec)
             else:
-                close(self.writer)
-                await self._chunk_read_async()
+                self.pipe._writer.close()
+                await self.task.stdout.async_read(self.pipe._reader, autoclose=True)
                 while True:
                     pid, _ = waitpid(self.pid, WNOHANG)
                     if pid != 0:

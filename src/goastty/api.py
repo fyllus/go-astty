@@ -4,7 +4,7 @@ import os
 import sys
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any
+from typing import Any, SupportsIndex
 
 is_nt = os.name == 'nt'
 is_posix = os.name == 'posix'
@@ -97,6 +97,7 @@ if is_posix:
     WCONTINUED = os.WCONTINUED
 
 
+
 # ==========================================================================
 # Global Functions
 # ==========================================================================
@@ -163,6 +164,7 @@ def predirect(handle_or_fd: int) -> Any:
             return True, None
         except Exception as err:
             return False, err
+
     return True, StartUpInfo(hStdOutput=handle_or_fd, hStdError=handle_or_fd)
 
 def read(handle_or_fd: int, buffer_size: int = 4096) -> tuple[bytes, int | None]:
@@ -208,10 +210,155 @@ def simple_type_check(v: object, t: type) -> Any:
 # ==========================================================================
 # Base Objects
 # ==========================================================================
+
+class Pipe:
+    def __init__(self, pipe_attr: Any = None, size: int = 0) -> None:
+        _r, _w = pipe(pipe_attr, size)
+        self._reader = Descriptor(_r)
+        self._writer = Descriptor(_w)
+
+    # ================= reader =================
+
+    @property
+    def reader(self) -> Descriptor:
+        if self._reader is None:
+            raise RuntimeError("Pipe reader has been destroyed.")
+        return self._reader
+
+    @reader.deleter
+    def reader(self) -> None:
+        if self._reader is not None:
+            self._reader.close()
+            self._reader = None
+
+    # ================= writer =================
+
+    @property
+    def writer(self) -> Descriptor:
+        if self._writer is None:
+            raise RuntimeError("Pipe writer has been destroyed.")
+        return self._writer
+
+    @writer.deleter
+    def writer(self) -> None:
+        if self._writer is not None:
+            self._writer.close()
+            self._writer = None
+
+
+class PackedByte:
+    def __init__(self, init_byte: bytes | None, handle: int | None) -> None:
+        if handle:
+            self.handle = handle
+        if init_byte:
+            self.byte = init_byte
+
+    def has_byte(self):
+        return hasattr(self, 'byte')
+
+    def has_handle(self):
+        return hasattr(self, 'handle')
+
+    def __bool__(self):
+        return self.has_byte()
+
+class Descriptor(int):
+    _closed = False
+    def close(self):
+        if self:
+            self._closed = True
+            close(self)
+
+    def duplicate(self, target: int = 1, inheritable: bool = True):
+        return type(self)(duplicate(self, target, inheritable))
+
+    def read(self, buffer_size: int = 4096):
+        return PackedByte(*read(self, buffer_size))
+
+    def sync_waitpid(self, options: int = 0):
+        pid, status = waitpid(self, options)
+        self._completed = pid != 0
+        return type(self)(pid), status
+
+    async def async_waitpid(self, options: int = 0, time_sleep: float = 0.01):
+        while True:
+            pid, status  = self.sync_waitpid(options)
+            if self._completed:
+                return type(self)(pid), status
+            await asyncio.sleep(time_sleep)
+
+    def __bool__(self) -> bool:
+        return not self._closed or self._completed
+
+
+class ByteBuffer(bytearray):
+    def __init__(self, package: bytes | PackedByte | None = None) -> None:
+        super().__init__()
+        if package is not None:
+            self.stream(package)
+
+    def stream(self, value: PackedByte | bytes) -> None:
+        if not value:
+            pass
+        elif isinstance(value, PackedByte):
+            self.extend(value.byte)
+        elif isinstance(value, bytes):
+            self.extend(value)
+        else:
+            raise AssignmentError('invalid', value, bytes, PackedByte)
+
+    def sync_read(self, handle_or_fd: int | Descriptor, buffer_size: int = 4096, autoclose: bool = False):
+        """Universal synchronous stream reader loop"""
+        if not isinstance(handle_or_fd, (int, Descriptor)):
+            raise AssignmentError('invalid', handle_or_fd, int, Descriptor)
+
+        while True:
+            if isinstance(handle_or_fd, Descriptor):
+                chunk = handle_or_fd.read(buffer_size)
+            elif isinstance(handle_or_fd, int):
+                chunk, _ = read(handle_or_fd, buffer_size)
+            if not chunk:
+                break
+            self.stream(chunk)
+
+        if autoclose:
+            if isinstance(handle_or_fd, Descriptor)
+                handle_or_fd.close()
+            else:
+                close(handle_or_fd)
+
+    async def async_read(self, handle_or_fd: int | Descriptor, buffer_size: int = 4096, autoclose: bool = False):
+        """Universal asynchronous stream reader loop"""
+
+        if not isinstance(handle_or_fd, (int, Descriptor)):
+            raise AssignmentError('invalid', handle_or_fd, int, Descriptor)
+
+        loop = asyncio.get_running_loop()
+        while True:
+            if isinstance(handle_or_fd, Descriptor):
+                chunk = loop.run_in_executor(None, handle_or_fd.read, buffer_size)
+            elif isinstance(handle_or_fd, int):
+                chunk, _ = loop.run_in_executor(None, read, handle_or_fd, buffer_size)
+            if not chunk:
+                break
+            self.stream(chunk)
+
+        if autoclose:
+            if isinstance(handle_or_fd, Descriptor)
+                handle_or_fd.close()
+            else:
+                close(handle_or_fd)
+
+
 class Task(list):
     """Task IO structure controller"""
     def __init__(self, *args: str) -> None:
         """Initialize core argument list payload"""
+        self.__buffer__ = {
+            'stdout': ByteBuffer(),
+            'stderr': ByteBuffer(),
+            'stdin': ByteBuffer()
+        }
         if len(args) == 0:
             raise ValueError('Empty task is not allowed')
         super().__init__(self._build_(*args))
@@ -219,14 +366,26 @@ class Task(list):
     # ============== getters ==================
 
     @property
-    def program(self) -> str:
-        """Root binary target path"""
-        return self[0]
+    def unpack(self) -> tuple[str | None, list | None]:
+        if is_posix:
+            return self[0], list(self)
+        if is_nt:
+            return " ".join(f'"{arg}"' if " " in arg else arg for arg in self), None
+        else:
+            return None, None
 
     @property
-    def args(self) -> list[str]:
-        """Complete parameter argument sequence"""
-        return list(self)
+    def cmd(self) -> str:
+        """Root binary target path"""
+        cmd, _ = self.unpack
+        return cmd if cmd else ''
+
+    if is_posix:
+        @property
+        def args(self) -> list[str]:
+            """Complete parameter argument sequence"""
+            _, args = self.unpack
+            return args if args else ['']
 
     @property
     def environ(self) -> dict | None:
@@ -237,38 +396,21 @@ class Task(list):
         return getattr(self, '_use_path', True)
 
     @property
-    def stdout(self) -> bytearray:
+    def stdout(self) -> ByteBuffer:
         """Cumulative stream output buffer"""
-        return getattr(self, '_stdout', bytearray())
+        return self.__buffer__['stdout']
 
     @property
-    def stderr(self) -> bytearray:
+    def stdin(self) -> ByteBuffer:
+        """Cumulative stream input buffer"""
+        return self.__buffer__['stdout']
+
+    @property
+    def stderr(self) -> ByteBuffer:
         """Cumulative stream error buffer"""
-        return getattr(self, '_stderr', bytearray())
+        return self.__buffer__['stderr']
 
     # =============== setters ==========================
-
-    @stderr.setter
-    def stderr(self, value: bytes | bytearray) -> None:
-        """Append error fragments avoiding recursion"""
-        if isinstance(value, bytes):
-            value = bytearray(value)
-        simple_type_check(value, bytearray)
-        if not hasattr(self, '_stderr'):
-            setattr(self, '_stderr', value)
-        else:
-            self._stderr.extend(value)
-
-    @stdout.setter
-    def stdout(self, value: bytes | bytearray) -> None:
-        """Append output fragments avoiding recursion"""
-        if isinstance(value, bytes):
-            value = bytearray(value)
-        simple_type_check(value, bytearray)
-        if not hasattr(self, '_stdout'):
-            setattr(self, '_stdout', value)
-        else:
-            self._stdout.extend(value)
 
     @environ.setter
     def environ(self, value: dict) -> None:
@@ -296,6 +438,7 @@ class _BaseExecution(ABC):
     """Execution state IO controller"""
     def __init__(self, task: Task) -> None:
         """Bind objective target execution context"""
+        self.__exec__ = {}
         self.task = task
 
     # ================ getters =====================
@@ -305,14 +448,10 @@ class _BaseExecution(ABC):
         return getattr(self, '_pid', -1)
 
     @property
-    def writer(self) -> int:
-        """Pipeline inbound writing descriptor"""
-        return getattr(self, '_fdw', -1)
-
-    @property
-    def reader(self) -> int:
-        """Pipeline outbound reading descriptor"""
-        return getattr(self, '_fdr', -1)
+    def pipe(self):
+        if not '_pipe' in self.__exec__:
+            self.__exec__['_pipe'] = Pipe()
+        return self.__exec__['_pipe']
 
     # ================= setters =====================
 
@@ -320,37 +459,6 @@ class _BaseExecution(ABC):
     def pid(self, pid: int):
         """Set operational process identifier"""
         setattr(self, '_pid', simple_type_check(pid, int))
-
-    @writer.setter
-    def writer(self, fdw: int):
-        """Set inbound pipeline handle"""
-        setattr(self, '_fdw', simple_type_check(fdw, int))
-
-    @reader.setter
-    def reader(self, fdr: int):
-        """Set outbound pipeline handle"""
-        setattr(self, '_fdr', simple_type_check(fdr, int))
-
-    # =========== global methods ==========================
-
-    def _chunk_read(self) -> None:
-        """Universal synchronous stream reader loop"""
-        while True:
-            curr_chunk, _ = read(self.reader, 4096)
-            if not curr_chunk:
-                break
-            self.task.stdout = curr_chunk
-        close(self.reader)
-
-    async def _chunk_read_async(self) -> None:
-        """Universal asynchronous stream reader loop"""
-        loop = asyncio.get_running_loop()
-        while True:
-            curr_chunk, _ = await loop.run_in_executor(None, read, self.reader, 4096)
-            if not curr_chunk:
-                break
-            self.task.stdout = curr_chunk
-        close(self.reader)
 
     # ================== abstracts ===============================
 
@@ -374,28 +482,26 @@ if is_nt:
             return getattr(self, '_handle', -1)
 
         @handle.setter
-        def handle(self, value: int):
+        def handle(self, value: int | None):
             """Set win32 process tracking handle"""
-            setattr(self, '_handle', simple_type_check(value, int))
+            if value is not None
+                setattr(self, '_handle', simple_type_check(value, int))
 
         # ================ nt methods ================================
 
         def _setup_nt_pipeline(self) -> None:
             """Execute atomic win32 process spawning architecture"""
-            self.reader, self.writer = pipe()
 
             # torna o handle de escrita herdável pelo filho
-            duplicate(self.writer, inheritable=True)
-            _, packet = predirect(self.writer)
+            duplicate(self.pipe._writer, inheritable=True)
+            _, packet = predirect(self.pipe._writer)
 
             # o handle de leitura NÃO deve ser herdado pelo processo filho
-            duplicate(self.reader, inheritable=False)
-
-            cmd_line = " ".join(f'"{arg}"' if " " in arg else arg for arg in self.task)
-            _hp, _ht, _pid, _ = fork(param=ProcessParam(command_line=cmd_line, startup_info=packet))
+            self.pipe._reader.duplicate(inheritable=False)
+            _hp, _ht, _pid, _ = fork(param=ProcessParam(command_line=self.task.cmd, startup_info=packet))
 
             close(_ht)
-            close(self.writer)  # fecha o do pai para permitir o EOF nativo na leitura
+            self.pipe._writer.close()  # fecha o do pai para permitir o EOF nativo na leitura
             self.handle = _hp
             self.pid = _pid
 else:
@@ -417,21 +523,21 @@ else:
             if is_vec:
                 if self.task.use_path:
                     if self.task.environ:
-                        return try_to_execute(func_call, self.task.program, self.task.args, self.task.environ)
-                    return try_to_execute(func_call, self.task.program, self.task.args)
-                return try_to_execute(func_call, self.task.program, self.task.args)
+                        return try_to_execute(func_call, self.task.cmd, self.task.args, self.task.environ)
+                    return try_to_execute(func_call, self.task.cmd, self.task.args)
+                return try_to_execute(func_call, self.task.cmd, self.task.args)
             else:
                 if self.task.use_path:
                     if self.task.environ:
-                        return try_to_execute(func_call, self.task.program, *self.task.args, self.task.environ)
-                    return try_to_execute(func_call, self.task.program, *self.task.args)
-                return try_to_execute(func_call, self.task.program, *self.task.args)
+                        return try_to_execute(func_call, self.task.cmd, *self.task.args, self.task.environ)
+                    return try_to_execute(func_call, self.task.cmd, *self.task.args)
+                return try_to_execute(func_call, self.task.cmd, *self.task.args)
 
         def _child_side(self, is_vec: bool) -> None:
             """Execute post-fork targeted child processing routine"""
-            close(self.reader)
-            predirect(self.writer)
-            close(self.writer)
+            self.pipe._reader.close()
+            predirect(self.pipe._writer)
+            self.pipe._writer.close()
             exec_is_ok, exec_error = self._try_exec(is_vec)
             if not exec_is_ok:
                 sys.exit(127 if isinstance(exec_error, FileNotFoundError) else 1)

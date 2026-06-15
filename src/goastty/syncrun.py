@@ -27,11 +27,11 @@ class SyncTask(Execution):
                 self._child_side(is_vec)
             else:
                 close(self.writer)
-                self._chunk_read()
-                waitpid(self.pid, 0)
+                self.task.stdout.sync_read(self.pipe._reader, autoclose=True)
+                self.pid.sync_wait()
 
         elif is_nt:
             self._setup_nt_pipeline()
-            self._chunk_read()
-            waitpid(self.handle, W_INFINITE)
-            close(self.handle)
+            self.task.stdout.async_read(self.pipe._reader)
+            self.handle.sync_wait(W_INFINITE)
+            self.handle.close()
