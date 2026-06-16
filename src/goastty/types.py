@@ -102,7 +102,7 @@ class UnifiedIOBuffer(bytearray):
 
         if is_handle:
             while True:
-                chunk = handle_or_descriptor.read(buffer_size)
+                chunk, _ = handle_or_descriptor.read(buffer_size)
                 if not chunk:
                     break
                 self.extend(chunk)
@@ -132,7 +132,7 @@ class UnifiedIOBuffer(bytearray):
 
         if is_handle:
             while True:
-                chunk = await loop.run_in_executor(
+                chunk, _ = await loop.run_in_executor(
                     None, handle_or_descriptor.read, buffer_size
                 )
                 if not chunk:
