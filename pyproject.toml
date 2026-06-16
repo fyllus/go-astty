@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "go-astty"
-version = "0.2.0-a"
+version = "0.3.2"
 description = "go-astty is modular process orchestration gate for seamless synchronous and asynchronous command-line executions in Python."
 readme = "README.md"
 authors = [

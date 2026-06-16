@@ -1,52 +1,38 @@
 # Go-astty
 
-Version: `0.2.0-a`
+Version: `0.3.0-a`
 
-`go-astty` (Gate of Asynchronous and Synchronous TTY) is a modular, low-level process orchestration gate for seamless synchronous and asynchronous command-line executions in Python, featuring native cross-platform support (POSIX/Windows NT).
+`go-astty` (Gate of Asynchronous and Synchronous TTY) is a minimalist, ultra-high-performance process orchestration layer for seamless synchronous and asynchronous command-line executions in Python.
 
-The framework decouples process lifecycle management from standard I/O streams by introducing structured, data-driven pipelines, shifting execution responsibility into dedicated execution runtimes.
-
----
-
-## Project Status & Vision
-
-This project is currently undergoing active structural optimization and architectural refinement. The primary objective is to evaluate alternative, highly efficient approaches for process spawning and I/O multiplexing.
-
-Instead of relying on high-level standard abstractions, the focus is to map directly to the lowest possible native subsystem layers for both Windows NT (`_winapi` / `kernel32`) and POSIX (`os.fork` / `os.exec`), achieving maximum raw performance and minimal execution overhead.
+By bypassing heavy high-level abstractions, it maps directly to native subsystem layers for Windows NT (`_winapi`) and POSIX (`posix_spawn`), matching the performance of CPython's native `subprocess` while providing decoupled, data-driven pipelines.
 
 ---
 
-## Architecture
+## Performance-Driven Architecture
 
-The ecosystem splits execution into two lean, objective components:
+The framework is stripped of runtime bloat to achieve near-zero execution overhead through critical low-level optimizations:
 
-* **Task (`Task`)**: An extended list container acting as the payload data vector. It isolates the executable binary context (`program`, `args`) and acts as the direct target for cumulative stream output buffers (`stdout` and `stderr` as `bytearray`).
-* **Execution (`Execution`)**: The isolated state engine tied to a specific task instance to capture, track, and manage low-level native descriptors (`pipe`, `fork`, `waitpid`, `ReadFile`/`os.read`). It branches into two specialized runtime engines:
-* `syncrun.SyncTask`: Drives linear, blocking synchronous workflows using native syscalls.
-* `asyncrun.AsyncTask`: Drives non-blocking, cooperative event-loop routines using `asyncio`.
+* **Fast Process Spawning (`posix_spawn`)**: Bypasses the costly overhead of `os.fork()` on POSIX layers. By using native `posix_spawn` primitives, it completely skips the interpreter's thread-lock/GIL and memory page tables duplication, reducing process creation time from **~2.7 ms down to ~1.04 ms** (matching native C performance). For implementation details, see [docs/UNIFIED.md](https://www.google.com/search?q=docs/UNIFIED.md).
+* **Memory-Optimized Lifecycle (`__slots__`)**: Core tracking objects discard dynamic instance dictionaries (`__dict__`). Lifecycles are bound directly to fixed memory structures, optimizing allocation inside hot execution loops. For structural details, see [docs/TYPES.md](https://www.google.com/search?q=docs/TYPES.md).
+* **Non-Blocking Deadlock Prevention**: Asynchronous pipelines run stream buffer consumption and process termination tracking concurrently via `asyncio.gather`, eliminating pipeline blockages caused by full OS pipe limits. For API details, see [docs/ASTTY.md](https://www.google.com/search?q=docs/ASTTY.md).
 
 ---
+
+## Technical Documentation Breakdown
+
+For detailed architectural breakdowns, internal variables, and low-level subsystem mapping, consult the specialized documentation modules:
+
+* [docs/ASTTY.md](https://www.google.com/search?q=docs/ASTTY.md) – **Core API Reference**: Full breakdown of the Pure Functional Pipeline (`exec_sync`/`exec_async`) and Object-Oriented Pipeline (`SyncExecution`/`AsyncExecution`).
+* [docs/TYPES.md](https://www.google.com/search?q=docs/TYPES.md) – **Memory Type & Vector Reference**: Implementation details of high-performance memory structures (`UnifiedHandle`, `UnifiedIOBuffer`, `UnifiedTask`, `UnifiedGateway`).
+* [docs/UNIFIED.md](https://www.google.com/search?q=docs/UNIFIED.md) – **Low-Level Subsystem Abstraction**: Cross-platform abstractions normalizing Windows NT Win32 API calls and POSIX native syscall routines.
+* [docs/EXECUTION.md](https://www.google.com/search?q=docs/EXECUTION.md) – **State & Lifecycle Orchestration**: Pre-flight setups, pipe allocation algorithms, and process image spawning lifecycles (`init_startup`/`post_startup`).
+
+---
+
 ## Installation
-
-To install directly from the source repository:
-
-**Clone from Codeberg:**
-
-```bash
-git clone https://codeberg.org/Fyllus/go-astty.git
-
-```
-
-**Clone from GitHub:**
 
 ```bash
 git clone https://github.com/fyllus/go-astty.git
-
-```
-
-**Install:**
-
-```bash
 cd go-astty
 pip install .
 
@@ -54,90 +40,47 @@ pip install .
 
 ---
 
-## Usage Guide
+## Quick Start Usage
 
-### 1. Asynchronous Execution Pipeline (`AsyncTask`)
+### 1. Pure Functional Pipeline
 
-Perfect for long-running CLI integrations, concurrent network-bound stream tracking, or real-time execution without halting the asyncio event loop.
+Lightweight, stateless functional gateways for immediate execution and fast resource cleanup.
 
 ```python
 import asyncio
-from goastty.api import Task
-from goastty.asyncrun import AsyncTask
+from goastty.pipeline import exec_sync, exec_async
 
+# Synchronous Sequential Pipeline
+status_sync = exec_sync("tar", ["-czf", "backup.tar.gz", "src/"])
+
+# Asynchronous Concurrent Pipeline
 async def main():
-    # Instantiate argument payload vector
-    task = Task("ping", "-c", "5", "google.com")
-    
-    # Bind payload context to the async execution engine
-    runner = AsyncTask(task)
-    
-    # Fire the self-contained non-blocking runtime
-    await runner.run(use_path=True)
-    
-    # Consume output buffers directly from the task payload instance
-    print(task.stdout.decode("utf-8"))
+    status_async = await exec_async("ping", ["-c", "3", "google.com"])
 
 if __name__ == "__main__":
     asyncio.run(main())
 
 ```
 
-### 2. Synchronous Execution Pipeline (`SyncTask`)
+### 2. Object-Oriented Pipeline
 
-Ideal for local scripts, standard automation sequences, or linear operational pipelines.
+Stateful, data-driven context managers engineered for complex orchestration workflows.
 
 ```python
-from goastty.api import Task
-from goastty.syncrun import SyncTask
+import asyncio
+from goastty.types import SyncTask, AsyncTask
+from goastty.pipeline import SyncExecution, AsyncExecution
 
-def main():
-    # Build array configuration payload
-    task = Task("tar", "-czf", "backup.tar.gz", "src/")
-    
-    # Bind payload context to the blocking sync engine
-    runner = SyncTask(task)
-    
-    # Invoke execution directly
-    runner.run(use_path=True, is_vec=True)
-    
-    if len(task.stderr) > 0:
-        print(f"Errors captured: {task.stderr.decode('utf-8')}")
+# Synchronous OO Pipeline
+task_sync = SyncTask("git", ["status"])
+status_sync = SyncExecution(task_sync).run(get_stderr=True)
+
+# Asynchronous OO Pipeline
+async def main():
+    task_async = AsyncTask("ls", ["-la"])
+    status_async = await AsyncExecution(task_async).run(get_stderr=False)
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
 
 ```
-
----
-
-## API Specification
-
-> [!NOTE]
-> For a comprehensive breakdown of low-level OS primitives, internal variables, structures, and native syscall wrappers, consult the separate [API Documentation](docs/API.md).
-
-### `Task(list)`
-
-An extended list structure holding process data payloads and stream buffers.
-
-* **Properties**:
-* `program` (`str`): Extracts the root binary target anchor (`self[0]`).
-* `args` (`list[str]`): Complete sequence of parameter arguments.
-* `stdout` (`bytearray`): Cumulative output stream buffer.
-* `stderr` (`bytearray`): Cumulative error stream buffer.
-
-
-
-### `_BaseExecution` (Abstract Class)
-
-Low-level state controller managing OS-specific subsystem resource descriptors.
-
-* **Properties / Attributes**:
-* `pid` (`int`): Active system-level tracking process identifier.
-* `handle` (`int`): Active win32 process tracking handle (Windows NT only).
-* `reader` (`int`): Pipeline outbound reading descriptor.
-* `writer` (`int`): Pipeline inbound writing descriptor.
-
-
-* **Methods**:
-* `run(use_path: bool, env: dict | None, is_vec: bool)`: Abstract gateway implemented by runtime engines to drive native lifecycle setups.
