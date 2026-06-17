@@ -40,7 +40,7 @@ Directly invokes native Win32 system extensions using C-level extensions:
 * **`_nt_pipe(attr, size)`**: Wraps `_winapi.CreatePipe` to create an anonymous I/O channel.
 * **`_nt_waitpid(handle, opt)`**: Monitors process state using `_winapi.WaitForSingleObject`. If `opt == 1`, polls instantly with a zero timeout; otherwise, blocks indefinitely (`INFINITE`). Returns `(handle, exit_code)`.
 * **`_nt_read(handle, buffer_size)`**: Calls `_winapi.ReadFile`. Gracefully intercepts `BrokenPipeError` and returns `(b"", None)` upon channel termination.
-* **`_nt_spawn_process(cmd, args, env, si)`**: Quotes string array elements into a linear Win32 command-line string. Spawns via `_winapi.CreateProcess`, immediately releases the transient thread handle `ht`, and isolates the process handle.
+* **`_nt_spawn_process(cmd, args, si)`**: Quotes string array elements into a linear Win32 command-line string. Spawns via `_winapi.CreateProcess`, immediately releases the transient thread handle `ht`, and isolates the process handle.
 
 ### POSIX Internal Routines (`IS_POSIX`)
 
@@ -50,7 +50,7 @@ Directly invokes kernel system calls via fast C extensions:
 * **`_posix_pipe(attr, size)`**: Generates a standard reading/writing descriptor pair via `os.pipe`.
 * **`_posix_waitpid(pid, opt)`**: Wraps `os.waitpid(pid, opt)`. Intercepts `ChildProcessError` returning `(pid, 0)`.
 * **`_posix_read(descriptor, buffer_size)`**: Ingests bytes from the file descriptor via `os.read`.
-* **`_posix_spawn_process(cmd, args, env, si)`**: Uses `shutil.which` to locate command binaries within system paths. Manipulates file descriptor bindings within the child process through `os.POSIX_SPAWN_DUP2` structures. Isolates directory context changes safely via an atomic `try...finally` layout:
+* **`_posix_spawn_process(cmd, args, si)`**: Uses `shutil.which` to locate command binaries within system paths. Manipulates file descriptor bindings within the child process through `os.POSIX_SPAWN_DUP2` structures. Isolates directory context changes safely via an atomic `try...finally` layout:
 1. Captures the parent process's active directory location using `os.getcwd()`.
 2. Switches the workspace context to the requested directory target via `os.chdir(cwd)`.
 3. Executes the process instantly using the low-overhead `os.posix_spawn` system call.
@@ -65,7 +65,7 @@ Directly invokes kernel system calls via fast C extensions:
 The following functions expose a uniform signature across all platforms, acting as the primary entry points for low-level process manipulation.
 
 ```python
-def spawn(cmd: str | Path, args: list[str], env: dict[str, str] | None, si: StartUpInfo) -> tuple[int, int]
+def spawn(cmd: str | Path, args: list[str], si: StartUpInfo) -> tuple[int, int]
 
 ```
 

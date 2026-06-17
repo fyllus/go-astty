@@ -34,10 +34,8 @@ def init_startup(
     return cfg
 
 
-def post_startup(
-    cmd: str | Path, args: list[str], env: dict | None, config: StartUpInfo
-):
-    _pid, _handle = spawn(cmd, args, env, config)
+def post_startup(cmd: str | Path, args: list[str], config: StartUpInfo):
+    _pid, _handle = spawn(cmd, args, config)
     close(config["hStdOutput"])
     if config["hStdOutput"] != config["hStdError"]:
         close(config["hStdError"])
@@ -58,7 +56,7 @@ class Execution:
 
     def startup(self, get_stderr: bool = False) -> None:
         """Unified Execution PipeLine with dynamic lazy gate initialization"""
-        # Garante a instanciação sob demanda com a flag correta do usuário
+
         _gateway = UnifiedGateway(get_stderr=get_stderr)
         setattr(self, "_pipe", _gateway)
 
@@ -66,9 +64,7 @@ class Execution:
         if get_stderr:
             self.task.config["hStdError"] = _gateway.stderr_writer
 
-        _pid, _hp = spawn(
-            self.task.cmd(), self.task.args(), self.task.environ, self.task.config
-        )
+        _pid, _hp = spawn(self.task.cmd(), self.task.args(), self.task.config)
 
         _gateway.stdout_writer.close()
         if get_stderr:

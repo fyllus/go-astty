@@ -1,6 +1,6 @@
 # Go-astty
 
-Version: `0.3.5`
+Version: `0.3.6` : Optimized performance by eliminating redundancies and improving vital components.
 
 `go-astty` (Gate of Asynchronous and Synchronous TTY) is a minimalist, ultra-high-performance process orchestration layer for seamless synchronous and asynchronous command-line executions in Python.
 
@@ -29,13 +29,27 @@ For detailed architectural breakdowns, internal variables, and low-level subsyst
 
 ---
 
-## Installation
+## Install from repository
 
 ```bash
 git clone https://github.com/fyllus/go-astty.git
+```
+
+or
+
+```bash
+git clone https://codeberg.org/Fyllus/go-astty.git
+```
+
+```bash
 cd go-astty
 pip install .
+```
 
+## Install from pip
+
+```bash
+python -m pip install go-astty
 ```
 
 ---
@@ -48,17 +62,13 @@ Lightweight, stateless functional gateways for immediate execution and fast reso
 
 ```python
 import asyncio
-from goastty.pipeline import exec_sync, exec_async
+from goastty.astty import exec_sync, exec_async
 
 # Synchronous Sequential Pipeline
-status_sync = exec_sync("tar", ["-czf", "backup.tar.gz", "src/"])
+status_sync, output = exec_sync("tar", ["-czf", "backup.tar.gz", "src/"])
 
 # Asynchronous Concurrent Pipeline
-async def main():
-    status_async = await exec_async("ping", ["-c", "3", "google.com"])
-
-if __name__ == "__main__":
-    asyncio.run(main())
+status_async, output = await exec_async("ping", ["-c", "3", "google.com"])
 
 ```
 
@@ -69,18 +79,17 @@ Stateful, data-driven context managers engineered for complex orchestration work
 ```python
 import asyncio
 from goastty.types import SyncTask, AsyncTask
-from goastty.pipeline import SyncExecution, AsyncExecution
+from goastty.astty import SyncExecution, AsyncExecution
 
 # Synchronous OO Pipeline
-task_sync = SyncTask("git", ["status"])
+task_sync = SyncTask("git", "status")
 status_sync = SyncExecution(task_sync).run(get_stderr=True)
 
 # Asynchronous OO Pipeline
-async def main():
-    task_async = AsyncTask("ls", ["-la"])
-    status_async = await AsyncExecution(task_async).run(get_stderr=False)
 
-if __name__ == "__main__":
-    asyncio.run(main())
+task_async = AsyncTask("ls", "-la") 
+status_async = await AsyncExecution(task_async).run(get_stderr=False)
+
+# task.stdout and .stderr to get outputs, or, task.data to acess main data structure
 
 ```

@@ -24,6 +24,7 @@ class UnifiedRuntimeError(Exception):
         "unable_assignment": "Unable to assign type <{got}>: expected {expected}",
         "invalid_assignment": "Invalid Assignment: expected {expected}, cannot use <{got}>",
         "index_not_found": "Index not found in <type {got}>",
+        "all_must_be": "All values must be <type {got}>",
         "invalid_type": "Trying to set invalid type of <{got}>, but is expected <{expected}>",
         "empty_value_error": "Arguments collection cannot be empty",
     }
@@ -129,13 +130,14 @@ if IS_NT:
             return b"", None
 
     def _nt_spawn_process(
-        cmd: str | Path, args: list[str], env: dict[str, str] | None, si: StartUpInfo
+        cmd: str | Path, args: list[str], si: StartUpInfo
     ) -> tuple[int, int]:
         """NT spawn process"""
         cmd_line = f'"{cmd}" ' + " ".join(f'"{a}"' if " " in a else a for a in args)
         cwd = si.get("pCwdDir", None)
+        environment = si.get("hDefEnv", None)
         hp, ht, pid, _ = _winapi.CreateProcess(
-            None, cmd_line, None, None, True, 0, env, cwd, si
+            None, cmd_line, None, None, True, 0, environment, cwd, si
         )
         _nt_close(ht)
         return pid, hp
@@ -171,20 +173,25 @@ if IS_POSIX:
             return b"", None
 
     def _posix_spawn_process(
-        cmd: str | Path, args: list[str], env: dict[str, str] | None, si: StartUpInfo
+        cmd: str | Path, args: list[str], si: StartUpInfo
     ) -> tuple[int, int]:
         """Posix high-performance process spawning via native posix_spawn syscall"""
-        _prog = str(cmd)
-        _args = [_prog] + args
 
-        executable = shutil.which(_prog) if not isinstance(cmd, Path) else _prog
-        if not executable:
-            sys.exit(127)
+        # simple path edge case to ensure found executable
+        program = (
+            str(cmd)
+            if isinstance(cmd, Path)
+            else shutil.which(cmd)
+            if os.sep not in cmd
+            else cmd
+        )
 
+        arguments = [program] + args
         stdout = si.get("hStdOutput")
         stdin = si.get("hStdInput")
         stderr = si.get("hStdError")
         cwd = si.get("pCwdDir")
+        environment = si.get("hDefEnv", os.environ)
         old_cwd = None
 
         if cwd is not None:
@@ -194,18 +201,17 @@ if IS_POSIX:
             except Exception:
                 sys.exit(127)
 
-        file_actions = []
-        if stdin is not None:
-            file_actions.append((os.POSIX_SPAWN_DUP2, stdin, 0))
-        if stdout is not None:
-            file_actions.append((os.POSIX_SPAWN_DUP2, stdout, 1))
-        if stderr is not None:
-            file_actions.append((os.POSIX_SPAWN_DUP2, stderr, 2))
-
-        _env = env if env is not None else os.environ
+        # list comprehension to avoid overhead in .append()
+        file_actions = [
+            (os.POSIX_SPAWN_DUP2, fd, target)
+            for target, fd in ((0, stdin), (1, stdout), (2, stderr))
+            if fd is not None
+        ]
 
         try:
-            pid = os.posix_spawn(executable, _args, _env, file_actions=file_actions)
+            pid = os.posix_spawn(
+                program, arguments, environment, file_actions=file_actions
+            )
         finally:
             if old_cwd is not None:
                 os.chdir(old_cwd)
@@ -244,12 +250,10 @@ def waitpid(handle_or_descriptor: int, options: int = 0) -> tuple[int, int]:
     return _waitpid(handle_or_descriptor, options)
 
 
-def spawn(
-    cmd: str | Path, args: list[str], env: dict[str, str] | None, si: StartUpInfo
-) -> tuple[int, int]:
+def spawn(cmd: str | Path, args: list[str], si: StartUpInfo) -> tuple[int, int]:
     """Spawn a low level system process with unified lifecycle signature"""
     _spawn = _nt_spawn_process if IS_NT else _posix_spawn_process
-    return _spawn(cmd, args, env, si)
+    return _spawn(cmd, args, si)
 
 
 def check_all(iterable: Iterable[Any], *args: type) -> Iterable[Any]:

@@ -15,10 +15,9 @@ Stateless functional gateways engineered for immediate system process spawning, 
 def exec_sync(
     cmd: str | Path,
     args: list[str],
-    env: dict | None = None,
     config: StartUpInfo = StartUpInfo(),
     get_err: bool = False,
-) -> int:
+) -> tuple[int, UnifiedIOBuffer]:
 
 ```
 
@@ -26,7 +25,6 @@ def exec_sync(
 * **Arguments**:
 * `cmd`: Absolute binary path or system command name.
 * `args`: Sequential array of string parameters passed to the process.
-* `env`: Optional environment dictionary overrides. Defaults to inherited `os.environ`.
 * `config`: A configured `StartUpInfo` dict instance controlling descriptor inheritance and execution configurations.
 * `get_err`: When `True`, forces the initialization and reading of the standard error (`stderr`) pipeline channel.
 
@@ -39,7 +37,6 @@ def exec_sync(
 async def exec_async(
     cmd: str | Path,
     args: list[str],
-    env: dict | None = None,
     config: StartUpInfo = StartUpInfo(),
     get_err: bool = False,
 ) -> int:

@@ -13,13 +13,12 @@ from goastty.unified import IS_NT, StartUpInfo
 def exec_sync(
     cmd: str | Path,
     args: list[str],
-    env: dict | None = None,
     config: StartUpInfo = StartUpInfo(),
     get_err: bool = False,
-):
+) -> tuple[int, UnifiedIOBuffer]:
     """Execute and consume system stream processing to termination sequentially"""
     cfg = init_startup(get_err, config)
-    _pid, _handle = post_startup(cmd, args, env, cfg)
+    _pid, _handle = post_startup(cmd, args, cfg)
 
     data_output = UnifiedIOBuffer()
 
@@ -31,24 +30,25 @@ def exec_sync(
 
     _, status = target.sync_waitpid()
     target.close()
-    return status
+
+    # get status and output
+    return status, data_output
 
 
 async def exec_async(
     cmd: str | Path,
     args: list[str],
-    env: dict | None = None,
     config: StartUpInfo = StartUpInfo(),
     get_err: bool = False,
-):
+) -> tuple[int, UnifiedIOBuffer]:
     """Execute and consume system stream processing via non-blocking pool loop"""
     cfg = init_startup(get_err, config)
-    _pid, _handle = post_startup(cmd, args, env, cfg)
+    _pid, _handle = post_startup(cmd, args, cfg)
 
     data_output = UnifiedIOBuffer()
     target = UnifiedHandle(_handle if IS_NT else _pid)
 
-    # Concurrently consume stream pipes and wait for termination to prevent block deadlocks
+    # concurrently consume stream pipes and wait for termination to prevent block deadlocks
     if get_err:
         _, _, (_, status) = await asyncio.gather(
             data_output.async_read(cfg["hReaderOutput"], autoclose=True),
@@ -62,14 +62,16 @@ async def exec_async(
         )
 
     target.close()
-    return status
+
+    # get status and output
+    return status, data_output
 
 
 class SyncTask(UnifiedTask):
     """Synchronous targeted pipeline context payload wrapper"""
 
-    def __init__(self, *args: str | Path | UnifiedIOBuffer) -> None:
-        super().__init__(*args)
+    def __init__(self, cmd: str | Path, *args: str) -> None:
+        super().__init__(cmd, *args)
 
 
 class SyncExecution(Execution):
@@ -82,9 +84,9 @@ class SyncExecution(Execution):
         """Execute and consume stream processing to termination sequentially"""
         self.startup(get_stderr=get_stderr)
 
-        self.task.stdout.sync_read(self.pipe.stdout_reader, autoclose=True)
+        self.task.stdout().sync_read(self.pipe.stdout_reader, autoclose=True)
         if get_stderr:
-            self.task.stderr.sync_read(self.pipe.stderr_reader, autoclose=True)
+            self.task.stderr().sync_read(self.pipe.stderr_reader, autoclose=True)
 
         target_resource = self.pipe.handle if IS_NT else self.pipe.pid
 
@@ -96,8 +98,8 @@ class SyncExecution(Execution):
 class AsyncTask(UnifiedTask):
     """Asynchronous targeted pipeline context payload wrapper"""
 
-    def __init__(self, *args: str | Path | UnifiedIOBuffer) -> None:
-        super().__init__(*args)
+    def __init__(self, cmd: str | Path, *args: str) -> None:
+        super().__init__(cmd, *args)
 
 
 class AsyncExecution(Execution):
@@ -114,13 +116,13 @@ class AsyncExecution(Execution):
 
         if get_stderr:
             _, _, (_, status) = await asyncio.gather(
-                self.task.stdout.async_read(self.pipe.stdout_reader, autoclose=True),
-                self.task.stderr.async_read(self.pipe.stderr_reader, autoclose=True),
+                self.task.stdout().async_read(self.pipe.stdout_reader, autoclose=True),
+                self.task.stderr().async_read(self.pipe.stderr_reader, autoclose=True),
                 target_resource.async_waitpid(),
             )
         else:
             _, (_, status) = await asyncio.gather(
-                self.task.stdout.async_read(self.pipe.stdout_reader, autoclose=True),
+                self.task.stdout().async_read(self.pipe.stdout_reader, autoclose=True),
                 target_resource.async_waitpid(),
             )
 

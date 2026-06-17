@@ -21,7 +21,6 @@ from goastty.unified import (
 class UnifiedHandle:
     """Lifecycle controller for asynchronous process tracking and channel descriptors"""
 
-    # Impede a criação do __dict__ dinâmico e congela o espaço em memória
     __slots__ = ("fd", "_closed", "_completed")
 
     def __init__(self, value: int) -> None:
@@ -187,90 +186,50 @@ class UnifiedDataCollector(dict):
 class UnifiedTask(list):
     """Task IO structure controller"""
 
-    def __init__(self, *args: str | Path | UnifiedIOBuffer) -> None:
+    def __init__(self, cmd: str | Path, *args: str) -> None:
         """Initialize core argument list payload"""
         self.data = UnifiedDataCollector()
         self.config = StartUpInfo()
-        super().__init__(self._build_(*args))
+
+        # eliminate _build_ to keep init clean and direct
+        _args = list(args)
+        if len(_args) == 0:
+            raise UnifiedRuntimeError("empty_value_error", _args)
+
+        super().__init__([cmd] + _args)
 
     # ==================== getters =========================
-
-    def cmd(self) -> str:
-        """Root binary target path"""
+    # turn  all into simple getter methods
+    def cmd(self) -> str | Path:
+        """Root binary target path: Path or String"""
         return self[0] if self else ""
 
     def args(self) -> list[str]:
         """Complete parameter argument sequence"""
         return self[1:] if len(self) > 1 else [""]
 
-    @property
-    def environ(self) -> dict | None:
-        return self.config.get("hDefEnv", None)
-
-    @property
-    def cwd(self) -> Path | None:
-        return self.config.get("pCwdDir", None)
-
-    @property
-    def use_path(self) -> bool:
-        return not getattr(self, "_u_path", False)
-
-    @property
     def stdout(self) -> UnifiedIOBuffer:
         """Cumulative stream output buffer"""
         return self.data["stdout"]
 
-    @property
     def stdin(self) -> UnifiedIOBuffer:
         """Cumulative stream input buffer"""
         return self.data["stdin"]
 
-    @property
     def stderr(self) -> UnifiedIOBuffer:
         """Cumulative stream error buffer"""
         return self.data["stderr"]
 
-    # ================ setters =================
-
-    @environ.setter
-    def envirion(self, value: dict) -> None:
-        self.config["hDefEnv"] = value
-
-    @cwd.setter
-    def cwd(self, value: Path) -> None:
-        self.config["pCwdDir"] = value
-
-    @use_path.setter
-    def use_path(self, value: bool) -> None:
-        if not isinstance(value, bool):
-            raise UnifiedRuntimeError("invalid_assignment", value, bool)
-        setattr(self, "_u_path", value)
+    def env(self, env: dict) -> None:
+        """Set envirionment into config"""
+        if not env or not isinstance(env, dict):
+            raise UnifiedRuntimeError("unable_assignment", env, dict)
+        self.config["hDefEnv"] = env
 
     # ================ methods =======================
 
     def __str__(self) -> str:
         return " ".join(f'"{a}"' if " " in a else a for a in self)
-
-    def _build_(self, *args: Any) -> list[str]:
-        _args = list(args)
-        if len(_args) == 0:
-            raise UnifiedRuntimeError("empty_value_error", _args)
-
-        if len(_args) > 1 and isinstance(_args[0], (bytes, UnifiedIOBuffer)):
-            self.data["stdin"] = (
-                UnifiedIOBuffer(_args[0]) if isinstance(_args[0], bytes) else _args[0]
-            )
-            _args = _args[1:]
-
-        self.use_path = isinstance(_args[0], Path)
-
-        if not self.use_path:
-            # Rebuild clean payload targets
-            _processed = [str(_args[0])] + list(_args[1:])
-        else:
-            _processed = list(_args)
-
-        return [a for a in check_all(_processed, str)]
 
 
 class UnifiedGateway:

@@ -73,9 +73,7 @@ async def async_read(self, handle_or_descriptor: int | UnifiedHandle, buffer_siz
 #### Interface Properties & Methods
 
 * **`cmd()` / `args()**`: Split arguments cleanly, returning the root executable binary or parameter sequences respectively.
-* **`environ` / `cwd**`: Connect directly to fields inside the internal `StartUpInfo` structural meta dictionary wrapper.
-* **`_build_(*args)`**: Pre-flight verification constructor that handles incoming execution types. It extracts and assigns standard input payloads if a raw byte sequence or an independent buffer instance precedes the commands.
-
+* **`env`: Connect directly to fields inside the internal `StartUpInfo` structural meta dictionary wrapper.
 ---
 
 ## 4. Architectural Boundaries
