@@ -1,12 +1,11 @@
 import asyncio
 from pathlib import Path
-from typing import Any, Self
+from typing import Self
 
+from goastty import UnifiedRuntimeError
 from goastty.unified import (
     IS_NT,
     StartUpInfo,
-    UnifiedRuntimeError,
-    check_all,
     close,
     pipe,
     read,
