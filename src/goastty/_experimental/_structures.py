@@ -1,8 +1,10 @@
+"""Implementings"""
+
 import os
 import sys
 from typing import Any
 
-from goastty.unified import IS_NT
+IS_NT = os.name == "nt"
 
 
 class UnifiedSI:

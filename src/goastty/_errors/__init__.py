@@ -1,4 +1,4 @@
-class UnifiedRuntimeError(Exception):
+class ExecutionError(Exception):
     """Exception raised for execution errors with dynamic case dictionary."""
 
     _cases = {

@@ -2,7 +2,7 @@ import asyncio
 import subprocess
 from time import time
 
-from goastty.astty import (
+from goastty import (
     AsyncExecution,
     AsyncTask,
     SyncExecution,
@@ -10,7 +10,7 @@ from goastty.astty import (
 )
 
 # Benchmark configuration
-ITERATIONS = 100
+ITERATIONS = 1000
 CMD = "ls"
 ARGS = "-an"
 

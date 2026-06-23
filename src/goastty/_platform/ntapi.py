@@ -2,9 +2,9 @@ import os
 from pathlib import Path
 from typing import Any
 
-VERIFY_OS_IS_NT = os.name == "nt"
+from ._struct import StartUpInfo
 
-if VERIFY_OS_IS_NT:
+if os.name == "nt":
     import _winapi as win
     from ctypes import wintypes
 
@@ -18,26 +18,26 @@ if VERIFY_OS_IS_NT:
     NT_INFINITE = win.INFINITE
     NT_WAIT_OBJECT_0 = win.WAIT_OBJECT_0
 
-    def _close(handle: int) -> None:
+    def close(handle: int) -> None:
         """NT handle close"""
         try:
             win.CloseHandle(handle)
         except OSError:
             pass
 
-    def _pipe(attr: Any, size: int | None) -> tuple[int, int]:
+    def pipe(attr: Any = None, size: int | None = None) -> tuple[int, int]:
         """NT pipeline creator"""
         size = size if size is not None else 0
         return win.CreatePipe(attr, size)
 
-    def _waitpid(handle: int, opt: int = 0) -> tuple[int, int]:
+    def waitpid(handle: int, opt: int = 0) -> tuple[int, int]:
         """NT wait for process handle to terminate"""
         timeout = 0 if opt == 1 else NT_INFINITE
         if win.WaitForSingleObject(handle, timeout) == NT_WAIT_OBJECT_0:
             return handle, win.GetExitCodeProcess(handle)
         return 0, 0
 
-    def _read(handle: int, buffer_size: int = 4096) -> tuple[bytes, int | None]:
+    def read(handle: int, buffer_size: int = 4096) -> tuple[bytes, int | None]:
         """NT chunk read from stream source"""
         try:
             res, _ = win.ReadFile(handle, buffer_size)
@@ -45,9 +45,7 @@ if VERIFY_OS_IS_NT:
         except BrokenPipeError, OSError:
             return b"", None
 
-    def _spawn_process(
-        cmd: str | Path, args: list[str], si: StartUpInfo
-    ) -> tuple[int, int]:
+    def spawn(cmd: str | Path, args: list[str], si: StartUpInfo) -> tuple[int, int]:
         """NT spawn process"""
         cmd_line = f'"{cmd}" ' + " ".join(f'"{a}"' if " " in a else a for a in args)
         cwd = si.get("pCwdDir", None)
@@ -55,5 +53,5 @@ if VERIFY_OS_IS_NT:
         hp, ht, pid, _ = win.CreateProcess(
             None, cmd_line, None, None, True, 0, environment, cwd, si
         )
-        _close(ht)
+        close(ht)
         return pid, hp

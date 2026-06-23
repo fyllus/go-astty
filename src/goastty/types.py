@@ -1,23 +1,21 @@
 import asyncio
+import os
 from pathlib import Path
 from typing import Self
 
-from goastty import UnifiedRuntimeError
-from goastty.unified import (
-    IS_NT,
-    StartUpInfo,
-    close,
-    pipe,
-    read,
-    waitpid,
-)
+from ._errors import ExecutionError
+
+if os.name == "nt":
+    from ._platform import ntapi as _platform
+else:
+    from ._platform import posixapi as _platform
 
 # ==========================================================================
 # Structures
 # ==========================================================================
 
 
-class UnifiedHandle:
+class Handle:
     """Lifecycle controller for asynchronous process tracking and channel descriptors"""
 
     __slots__ = ("fd", "_closed", "_completed")
@@ -38,7 +36,7 @@ class UnifiedHandle:
         return self.fd
 
     def __eq__(self, other: object) -> bool:
-        if isinstance(other, UnifiedHandle):
+        if isinstance(other, Handle):
             return self.fd == other.fd
         if isinstance(other, int):
             return self.fd == other
@@ -48,36 +46,36 @@ class UnifiedHandle:
         """Destroy resource context on native system operational layer"""
         if not self._closed and self.fd != -1:
             self._closed = True
-            close(self.fd)
+            _platform.close(self.fd)
 
     def read(self, buffer_size: int = 4096) -> tuple[bytes, int | None]:
         """Consume data block from active channel descriptor"""
-        return read(self.fd, buffer_size)
+        return _platform.read(self.fd, buffer_size)
 
-    def sync_waitpid(self, options: int = 0) -> tuple["UnifiedHandle", int]:
+    def sync_waitpid(self, options: int = 0) -> tuple["Handle", int]:
         """Verify tracking target process execution state once"""
-        pid, status = waitpid(self.fd, options)
+        pid, status = _platform.waitpid(self.fd, options)
         if pid != 0:
             self._completed = True
-        return UnifiedHandle(pid), status
+        return Handle(pid), status
 
     async def async_waitpid(
         self, options: int = 0, time_sleep: float = 0.01
-    ) -> tuple["UnifiedHandle", int]:
+    ) -> tuple["Handle", int]:
         """Await standard process termination via non-blocking pool loop"""
         while not self._completed:
             pid, status = self.sync_waitpid(options)
             if self._completed:
                 return pid, status
             await asyncio.sleep(time_sleep)
-        return UnifiedHandle(self.fd), 0
+        return Handle(self.fd), 0
 
     def __bool__(self) -> bool:
         return not self._closed or self._completed
 
 
-class UnifiedIOBuffer(bytearray):
-    """Unified internal extensible I/O data cache container"""
+class Buffer(bytearray):
+    """_platform internal extensible I/O data cache container"""
 
     def __init__(self, package: bytes | None = None) -> None:
         super().__init__()
@@ -91,12 +89,12 @@ class UnifiedIOBuffer(bytearray):
 
     def sync_read(
         self,
-        handle_or_descriptor: int | UnifiedHandle,
+        handle_or_descriptor: int | Handle,
         buffer_size: int = 4096,
         autoclose: bool = False,
     ) -> None:
         """Universal synchronous stream reader loop"""
-        is_handle = isinstance(handle_or_descriptor, UnifiedHandle)
+        is_handle = isinstance(handle_or_descriptor, Handle)
 
         if is_handle:
             while True:
@@ -107,7 +105,7 @@ class UnifiedIOBuffer(bytearray):
         else:
             fd = int(handle_or_descriptor)
             while True:
-                raw, _ = read(fd, buffer_size)
+                raw, _ = _platform.read(fd, buffer_size)
                 if not raw:
                     break
                 self.extend(raw)
@@ -116,16 +114,16 @@ class UnifiedIOBuffer(bytearray):
             if is_handle:
                 handle_or_descriptor.close()
             else:
-                close(int(handle_or_descriptor))
+                _platform.close(int(handle_or_descriptor))
 
     async def async_read(
         self,
-        handle_or_descriptor: int | UnifiedHandle,
+        handle_or_descriptor: int | Handle,
         buffer_size: int = 4096,
         autoclose: bool = False,
     ) -> None:
         """Universal asynchronous stream reader loop"""
-        is_handle = isinstance(handle_or_descriptor, UnifiedHandle)
+        is_handle = isinstance(handle_or_descriptor, Handle)
         loop = asyncio.get_running_loop()
 
         if is_handle:
@@ -139,7 +137,9 @@ class UnifiedIOBuffer(bytearray):
         else:
             fd = int(handle_or_descriptor)
             while True:
-                raw, _ = await loop.run_in_executor(None, read, fd, buffer_size)
+                raw, _ = await loop.run_in_executor(
+                    None, _platform.read, fd, buffer_size
+                )
                 if not raw:
                     break
                 self.extend(raw)
@@ -148,54 +148,60 @@ class UnifiedIOBuffer(bytearray):
             if is_handle:
                 handle_or_descriptor.close()
             else:
-                close(int(handle_or_descriptor))
+                _platform.close(int(handle_or_descriptor))
 
 
-class UnifiedDataCollector(dict):
+class Collector(dict):
     """Storage map routing for standard I/O bytearray pipelines"""
 
     def __new__(cls) -> Self:
         obj = super().__new__(cls)
         super(dict, obj).__init__()
-        dict.__setitem__(obj, "stdout", UnifiedIOBuffer())
-        dict.__setitem__(obj, "stderr", UnifiedIOBuffer())
-        dict.__setitem__(obj, "stdin", UnifiedIOBuffer())
+        dict.__setitem__(obj, "stdout", Buffer())
+        dict.__setitem__(obj, "stderr", Buffer())
+        dict.__setitem__(obj, "stdin", Buffer())
         return obj
 
     @property
-    def stdout(self) -> UnifiedIOBuffer:
+    def stdout(self) -> Buffer:
         return self["stdout"]
 
     @property
-    def stderr(self) -> UnifiedIOBuffer:
+    def stderr(self) -> Buffer:
         return self["stderr"]
 
     @property
-    def stdin(self) -> UnifiedIOBuffer:
+    def stdin(self) -> Buffer:
         return self["stdin"]
 
-    def __setitem__(self, key: str, value: UnifiedIOBuffer) -> None:
-        if not isinstance(value, UnifiedIOBuffer):
-            raise UnifiedRuntimeError("invalid_assignment", value, UnifiedIOBuffer)
+    def __setitem__(self, key: str, value: Buffer) -> None:
+        if not isinstance(value, Buffer):
+            raise ExecutionError("invalid_assignment", value, Buffer)
         if key not in self:
-            raise UnifiedRuntimeError("index_not_found", key, str)
+            raise ExecutionError("index_not_found", key, str)
         super().__setitem__(key, value)
 
 
-class UnifiedTask(list):
+class Task(list):
     """Task IO structure controller"""
 
     def __init__(self, cmd: str | Path, *args: str) -> None:
         """Initialize core argument list payload"""
-        self.data = UnifiedDataCollector()
-        self.config = StartUpInfo()
+        self.data = Collector()
+        self.config = _platform.StartUpInfo()
 
         # eliminate _build_ to keep init clean and direct
-        _args = list(args)
-        if len(_args) == 0:
-            raise UnifiedRuntimeError("empty_value_error", _args)
+        if all(isinstance(arg, str) for arg in args):
+            _args = list(args)
+        else:
+            raise ExecutionError("all_must_be", args, str)
 
-        super().__init__([cmd] + _args)
+        if isinstance(cmd, (str, Path)):
+            _cmd = [cmd]
+        else:
+            raise ExecutionError("invalid_type", cmd, Path)
+
+        super().__init__(_cmd + _args)
 
     # ==================== getters =========================
     # turn  all into simple getter methods
@@ -207,22 +213,22 @@ class UnifiedTask(list):
         """Complete parameter argument sequence"""
         return self[1:] if len(self) > 1 else [""]
 
-    def stdout(self) -> UnifiedIOBuffer:
+    def stdout(self) -> Buffer:
         """Cumulative stream output buffer"""
         return self.data["stdout"]
 
-    def stdin(self) -> UnifiedIOBuffer:
+    def stdin(self) -> Buffer:
         """Cumulative stream input buffer"""
         return self.data["stdin"]
 
-    def stderr(self) -> UnifiedIOBuffer:
+    def stderr(self) -> Buffer:
         """Cumulative stream error buffer"""
         return self.data["stderr"]
 
     def env(self, env: dict) -> None:
         """Set envirionment into config"""
         if not env or not isinstance(env, dict):
-            raise UnifiedRuntimeError("unable_assignment", env, dict)
+            raise ExecutionError("unable_assignment", env, dict)
         self.config["hDefEnv"] = env
 
     # ================ methods =======================
@@ -231,25 +237,25 @@ class UnifiedTask(list):
         return " ".join(f'"{a}"' if " " in a else a for a in self)
 
 
-class UnifiedGateway:
+class Gateway:
     """Process state boundary and low-level IO descriptor keeper"""
 
     def __init__(self, get_stderr: bool = False) -> None:
-        _out_r, _out_w = pipe()
-        self.stdout_reader = UnifiedHandle(_out_r)
-        self.stdout_writer = UnifiedHandle(_out_w)
+        _out_r, _out_w = _platform.pipe()
+        self.stdout_reader = Handle(_out_r)
+        self.stdout_writer = Handle(_out_w)
 
         if get_stderr:
-            _err_r, _err_w = pipe()
-            self.stderr_reader = UnifiedHandle(_err_r)
-            self.stderr_writer = UnifiedHandle(_err_w)
+            _err_r, _err_w = _platform.pipe()
+            self.stderr_reader = Handle(_err_r)
+            self.stderr_writer = Handle(_err_w)
 
     @property
-    def pid(self) -> UnifiedHandle:
-        return getattr(self, "_pid", UnifiedHandle(-1000))
+    def pid(self) -> Handle:
+        return getattr(self, "_pid", Handle(-1000))
 
-    if IS_NT:
+    if os.name == "nt":
 
         @property
-        def handle(self) -> UnifiedHandle:
-            return getattr(self, "_handle", UnifiedHandle(-1000))
+        def handle(self) -> Handle:
+            return getattr(self, "_handle", Handle(-1000))

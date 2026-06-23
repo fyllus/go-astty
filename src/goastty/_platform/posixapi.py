@@ -4,38 +4,36 @@ import sys
 from pathlib import Path
 from typing import Any
 
-VERIFY_OS_IS_POSIX = os.name == "posix"
+from ._struct import StartUpInfo
 
-if VERIFY_OS_IS_POSIX:
+if os.name == "posix":
 
-    def _close(descriptor: int) -> None:
+    def close(descriptor: int) -> None:
         """Posix descriptor close"""
         try:
             os.close(descriptor)
         except OSError:
             pass
 
-    def _pipe(attr: Any, size: int | None) -> tuple[int, int]:
+    def pipe(attr: Any = None, size: int | None = None) -> tuple[int, int]:
         """Posix pipeline creator"""
         return os.pipe()
 
-    def _waitpid(pid: int, opt: int = 0) -> tuple[int, int]:
+    def waitpid(pid: int, opt: int = 0) -> tuple[int, int]:
         """Posix wait for process id terminate"""
         try:
             return os.waitpid(pid, opt)
         except ChildProcessError:
             return pid, 0
 
-    def _read(descriptor: int, buffer_size: int = 4096) -> tuple[bytes, int | None]:
+    def read(descriptor: int, buffer_size: int = 4096) -> tuple[bytes, int | None]:
         """Read posix chunk from stream source"""
         try:
             return os.read(descriptor, buffer_size), None
         except BrokenPipeError, OSError:
             return b"", None
 
-    def _spawn_process(
-        cmd: str | Path, args: list[str], si: StartUpInfo
-    ) -> tuple[int, int]:
+    def spawn(cmd: str | Path, args: list[str], si: StartUpInfo) -> tuple[int, int]:
         """Posix high-performance process spawning via native posix_spawn syscall"""
 
         # simple path edge case to ensure found executable

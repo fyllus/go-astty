@@ -14,9 +14,9 @@ By bypassing heavy high-level abstractions, it maps directly to native subsystem
 
 The framework is stripped of runtime bloat to achieve near-zero execution overhead through critical low-level optimizations:
 
-* **Fast Process Spawning (`posix_spawn`)**: Bypasses the costly overhead of `os.fork()` on POSIX layers. By using native `posix_spawn` primitives, it completely skips the interpreter's thread-lock/GIL and memory page tables duplication, reducing process creation time from **~2.7 ms down to ~1.04 ms** (matching native C performance). For implementation details, see [docs/UNIFIED.md](https://github.com/fyllus/go-astty/tree/main/docs/UNIFIED.md).
+* **Fast Process Spawning (`posix_spawn`)**: Bypasses the costly overhead of `os.fork()` on POSIX layers. By using native `posix_spawn` primitives, it completely skips the interpreter's thread-lock/GIL and memory page tables duplication, reducing process creation time from **~2.7 ms down to ~1.04 ms** (matching native C performance). For implementation details, see [docs/PLATFORM.md](https://github.com/fyllus/go-astty/tree/main/docs/PLATFORM.md).
 * **Memory-Optimized Lifecycle (`__slots__`)**: Core tracking objects discard dynamic instance dictionaries (`__dict__`). Lifecycles are bound directly to fixed memory structures, optimizing allocation inside hot execution loops. For structural details, see [docs/TYPES.md](https://github.com/fyllus/go-astty/tree/main/docs/TYPES.md).
-* **Non-Blocking Deadlock Prevention**: Asynchronous pipelines run stream buffer consumption and process termination tracking concurrently via `asyncio.gather`, eliminating pipeline blockages caused by full OS pipe limits. For API details, see [docs/ASTTY.md](https://github.com/fyllus/go-astty/tree/main/docs/ASTTY.md).
+* **Non-Blocking Deadlock Prevention**: Asynchronous pipelines run stream buffer consumption and process termination tracking concurrently via `asyncio.gather`, eliminating pipeline blockages caused by full OS pipe limits. For API details, see [docs/MAIN.md](https://github.com/fyllus/go-astty/tree/main/docs/MAIN.md).
 
 ---
 
@@ -24,9 +24,9 @@ The framework is stripped of runtime bloat to achieve near-zero execution overhe
 
 For detailed architectural breakdowns, internal variables, and low-level subsystem mapping, consult the specialized documentation modules:
 
-* [docs/ASTTY.md](https://github.com/fyllus/go-astty/tree/main/docs/ASTTY.md) – **Core API Reference**: Full breakdown of the Pure Functional Pipeline (`exec_sync`/`exec_async`) and Object-Oriented Pipeline (`SyncExecution`/`AsyncExecution`).
+* [docs/MAIN.md](https://github.com/fyllus/go-astty/tree/main/docs/MAIN.md) – **Core API Reference**: Full breakdown of the Pure Functional Pipeline (`exec_sync`/`exec_async`) and Object-Oriented Pipeline (`SyncExecution`/`AsyncExecution`).
 * [docs/TYPES.md](https://github.com/fyllus/go-astty/tree/main/docs/TYPES.md) – **Memory Type & Vector Reference**: Implementation details of high-performance memory structures (`UnifiedHandle`, `UnifiedIOBuffer`, `UnifiedTask`, `UnifiedGateway`).
-* [docs/UNIFIED.md](https://github.com/fyllus/go-astty/tree/main/docs/UNIFIED.md) – **Low-Level Subsystem Abstraction**: Cross-platform abstractions normalizing Windows NT Win32 API calls and POSIX native syscall routines.
+* [docs/PLATFORM.md](https://github.com/fyllus/go-astty/tree/main/docs/PLATFORM.md) – **Low-Level Subsystem Abstraction**: Cross-platform abstractions normalizing Windows NT Win32 API calls and POSIX native syscall routines.
 * [docs/EXECUTION.md](https://github.com/fyllus/go-astty/tree/main/docs/EXECUTION.md) – **State & Lifecycle Orchestration**: Pre-flight setups, pipe allocation algorithms, and process image spawning lifecycles (`init_startup`/`post_startup`).
 
 ---
@@ -64,8 +64,7 @@ Lightweight, stateless functional gateways for immediate execution and fast reso
 
 ```python
 import asyncio
-from goastty.astty import exec_sync, exec_async
-
+from goastty import exec_async, exec_sync
 # Synchronous Sequential Pipeline
 status_sync, output = exec_sync("tar", ["-czf", "backup.tar.gz", "src/"])
 
@@ -80,7 +79,7 @@ Stateful, data-driven context managers engineered for complex orchestration work
 
 ```python
 import asyncio
-from goastty.astty import SyncExecution, AsyncExecution, SyncTask, AsyncTask
+from goastty import SyncExecution, AsyncExecution, SyncTask, AsyncTask
 
 # Synchronous OO Pipeline
 task_sync = SyncTask("git", "status")
