@@ -3,8 +3,6 @@ import os
 from . import execution, types
 from .types import _platform as platform
 
-__version__ = "0.3.7"
-
 __all__ = [
     "execution",
     "types",

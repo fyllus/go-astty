@@ -46,11 +46,11 @@ def post_startup(
 
 ### Class: `Execution`
 
-* **Description**: High-level state I/O controller designed to act as a managed state machine wrapper over a `UnifiedTask` lifecycle.
+* **Description**: High-level state I/O controller designed to act as a managed state machine wrapper over a `Task` lifecycle.
 
 #### Property Interface
 
-* **`pipe`** (`UnifiedGateway`): Exposes the current low-level gateway infrastructure tracking active stream descriptors and target process representations.
+* **`pipe`** (`Gateway`): Exposes the current low-level gateway infrastructure tracking active stream descriptors and target process representations.
 * **Error Control**: Accessing this property before invoking `.startup()` intentionally raises an `AttributeError` due to lazy variable initialization, preventing interactions with uninitialized descriptors.
 
 #### Operational Methods
@@ -62,11 +62,11 @@ def startup(self, get_stderr: bool = False) -> None:
 
 * **Description**: Coordinates lazy initialization, registers write descriptors into the underlying task configuration vector, spawns the process image, and binds resource wrappers.
 * **Internal Routine**:
-1. Instantiates a new `UnifiedGateway` layout bound to the runtime, setting up required pipe structures under the hood.
+1. Instantiates a new `Gateway` layout bound to the runtime, setting up required pipe structures under the hood.
 2. Binds the gateway writer references directly to the target process parameters (`task.config`).
 3. Invokes `spawn` passing the task's command string, expanded argument sequence, environment mappings, and configuration state.
 4. Calls `.close()` on the parent process's copy of the write descriptors immediately. This ensures proper EOF propagation across pipelines.
-5. Wraps raw integer system identifiers into specialized `UnifiedHandle` tracking structures, binding them directly onto the active gateway container.
+5. Wraps raw integer system identifiers into specialized `Handle` tracking structures, binding them directly onto the active gateway container.
 
 
 

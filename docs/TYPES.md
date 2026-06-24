@@ -6,7 +6,7 @@ The `types` module implements the underlying memory layouts and structural repre
 
 ## 1. High-Performance Structures
 
-### Class: `UnifiedHandle`
+### Class: `Handle`
 
 * **Description**: Lifecycle controller for non-blocking process tracking and operating system native channel descriptors.
 * **Memory Architecture**: Implements `__slots__` explicitly to suppress runtime dynamic instance tracking dictionary creation (`__dict__`). It locks its memory space to three predefined attributes: `fd`, `_closed`, and `_completed`.
@@ -26,14 +26,14 @@ The `types` module implements the underlying memory layouts and structural repre
 
 ## 2. Stream & Allocation Ingestion
 
-### Class: `UnifiedIOBuffer`
+### Class: `Buffer`
 
 * **Base**: `bytearray`
 * **Description**: Extensible, high-efficiency system I/O stream cache wrapper that operates directly on byte sequences.
 
 #### Stream Processing Engine
 
-The ingestion loop is split into dual execution models depending on whether a stateful `UnifiedHandle` instance or a raw system descriptor integer is provided.
+The ingestion loop is split into dual execution models depending on whether a stateful `Handle` instance or a raw system descriptor integer is provided.
 
 ```python
 # Synchronous ingestion pipeline
@@ -55,17 +55,17 @@ async def async_read(self, handle_or_descriptor: int | UnifiedHandle, buffer_siz
 
 ## 3. Data Vector Routing Maps
 
-### Class: `UnifiedDataCollector`
+### Class: `Collector`
 
 * **Base**: `dict`
-* **Description**: An internal storage router specifically configured to link named system standard communication pipelines (`stdout`, `stderr`, `stdin`) to separate `UnifiedIOBuffer` byte streams.
+* **Description**: An internal storage router specifically configured to link named system standard communication pipelines (`stdout`, `stderr`, `stdin`) to separate `Buffer` byte streams.
 * **Data Guard Constraints**:
 * Overrides `__setitem__` to prevent outside components from substituting standard channels with unmanaged types.
-* Throws a `UnifiedRuntimeError` with case string keys (`"invalid_assignment"`, `"index_not_found"`) if fields are altered arbitrarily.
+* Throws a `ExecutionError` with case string keys (`"invalid_assignment"`, `"index_not_found"`) if fields are altered arbitrarily.
 
 
 
-### Class: `UnifiedTask`
+### Class: `Task`
 
 * **Base**: `list`
 * **Description**: High-level execution payload controller. Inherits list structures to contain the complete sequence of targeted execution variables.
@@ -78,12 +78,12 @@ async def async_read(self, handle_or_descriptor: int | UnifiedHandle, buffer_siz
 
 ## 4. Architectural Boundaries
 
-### Class: `UnifiedGateway`
+### Class: `Gateway`
 
 * **Description**: Low-level operational boundary that isolates active channel readers and writers from the state engine.
 
 #### Structural Attributes
 
-* **`stdout_reader` / `stdout_writer**`: Statefully wrapped `UnifiedHandle` instances tracking newly initialized cross-platform anonymous pipelines.
+* **`stdout_reader` / `stdout_writer**`: Statefully wrapped `Handle` instances tracking newly initialized cross-platform anonymous pipelines.
 * **`stderr_reader` / `stderr_writer**`: Independent handle paths tracking error streams (initialized exclusively when `get_stderr=True`).
 * **`pid` / `handle**`: Specialized property definitions exposing the system-level identification boundaries (`_pid` on POSIX, and `_handle` or `_pid` on Windows NT frameworks). Returns fallback configurations if checked prior to process assignment.

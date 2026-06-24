@@ -54,11 +54,11 @@ async def exec_async(
 
 ## 2. Object-Oriented Pipeline
 
-Stateful execution wrappers mapping a distinct data payload tracking vector (`UnifiedTask`) to an isolated machine controller (`Execution`).
+Stateful execution wrappers mapping a distinct data payload tracking vector (`Task`) to an isolated machine controller (`Execution`).
 
 ### Class: `SyncTask`
 
-* **Base**: `UnifiedTask`
+* **Base**: `Task`
 * **Description**: Synchronous targeted pipeline context payload wrapper. Encapsulates process metadata variables, binaries, arguments, and synchronous buffer targets.
 
 ### Class: `SyncExecution`
@@ -78,7 +78,7 @@ Stateful execution wrappers mapping a distinct data payload tracking vector (`Un
 
 ### Class: `AsyncTask`
 
-* **Base**: `UnifiedTask`
+* **Base**: `Task`
 * **Description**: Asynchronous targeted pipeline context payload wrapper. Encapsulates data targets and maps async-compatible buffer states.
 
 ### Class: `AsyncExecution`
@@ -92,10 +92,6 @@ Stateful execution wrappers mapping a distinct data payload tracking vector (`Un
 3. Wraps `async_read` loops and the underlying `async_waitpid` state into a single atomic `asyncio.gather` pipeline.
 4. Releases handle claims and yields the system exit status code.
 
-
-
-
-
 ---
 
 ## 3. Internal Lifecycle & Optimization Architecture
@@ -106,5 +102,5 @@ The pipelines rely on an optimal internal low-level routine to bridge execution 
 | --- | --- | --- |
 | **1. Initialization** | `init_startup` | Resolves standard handles, initializes anonymous pipelines, and tracks reader/writer file descriptors. |
 | **2. Spawning** | `post_startup` | Bypasses `os.fork` overhead on POSIX using high-performance `posix_spawn` primitives. On Windows NT, delegates directly to `_winapi.CreateProcess`. |
-| **3. Memory Allocation** | Tracking | Shared descriptors rely on `__slots__` via `UnifiedHandle` to prevent dynamic namespace generation (`__dict__`). |
-| **4. IO Ingestion** | `UnifiedIOBuffer` | Automatically drains internal OS pipe streams directly into raw byte-arrays without encoding conversions during the hot loop. |
+| **3. Memory Allocation** | Tracking | Shared descriptors rely on `__slots__` via `Handle` to prevent dynamic namespace generation (`__dict__`). |
+| **4. IO Ingestion** | `Buffer` | Automatically drains internal OS pipe streams directly into raw byte-arrays without encoding conversions during the hot loop. |
