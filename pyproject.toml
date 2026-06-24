@@ -10,6 +10,7 @@ readme = "README.md"
 authors = [
     { name = "Fyllus", email = "Fyllus@git.com" }
 ]
+keywords = ["shell", "command", "terminal", "subprocess", "tty", "cli", "async", ""]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
