@@ -149,14 +149,6 @@ def run(args: argparse.Namespace, unk: list[str]):
         extra_args = " ".join(unk)
         changelog_logger.info(f"NEW PUSH: {extra_args}")
 
-    check_script = ObjectScript(f"""
-    if ! python3 -c "import {PROJECT_NAME}" >/dev/null 2>&1; then
-        cd {ROOT.resolve()} || return 1
-        pip install -e .
-    fi
-    """)
-    return ObjectShell(shell="bash", cmd=check_script).run(get_err=True)
-
 
 if __name__ == "__main__":
     parsed_args, unknown = get_args()
