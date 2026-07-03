@@ -1,7 +1,8 @@
 import asyncio
 import os
+from copy import copy, deepcopy
 from pathlib import Path
-from typing import Self
+from typing import Iterable, Self
 
 from ._errors import ExecutionError
 
@@ -235,6 +236,17 @@ class Task(list):
 
     def __str__(self) -> str:
         return " ".join(f'"{a}"' if " " in a else a for a in self)
+
+    def add(self, *args: str) -> Self:
+        """Add new args to this instance"""
+        super().extend(args)
+        return self
+
+    def new(self, *args: str):
+        """Create a deepcopy of this instance and extend this argments"""
+        _new = deepcopy(self)
+
+        return _new.add(*args)
 
 
 class Gateway:
