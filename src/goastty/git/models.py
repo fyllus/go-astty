@@ -2,53 +2,49 @@ from pathlib import Path
 
 from pygit2 import Commit, Repository, Signature
 
-from goastty.git.errors import GitRepoError
-
 
 class StageModel(list):
     def __init__(self, *files: Path) -> None:
-        if not all(isinstance(f, Path) for f in files):
-            raise TypeError("files must be <Path>")
         _resolved = []
         for file in files:
-            if (not isinstance(file, Path)) or (not file.exists()):
-                raise TypeError("files must be <Path>")
+            if not isinstance(file, Path) or not file.exists():
+                raise TypeError("files must be a valid <Path>")
             _resolved.append(file.resolve())
-        super().__init__(*_resolved)
+        super().__init__(_resolved)
 
     def relative_to(self, path: Path, as_string: bool = False):
+        """Iterator of files in StageModel: yield the file path relative to given path"""
         for file in self:
             relative = file.relative_to(path)
             yield relative if not as_string else str(relative)
 
-    def add_to(self, repo: RepoModel):
+    def add_to(self, repo: "RepoModel"):
+        """Add all paths in StageModel to index of given repo: default will add all files"""
         if not self:
             repo.idx.add_all()
+            repo.idx.write()
             return repo
         for relative_path in self.relative_to(repo.wd):
             repo.idx.add(str(relative_path))
         repo.idx.write()
         return repo
 
-    def restore_from(self, repo: RepoModel, ref: str):
+    def restore_from(self, repo: "RepoModel", ref: str) -> "RepoModel":
+        """Restore all files in StageModel of a especific reference from given repo"""
         try:
-            commit = repo.repo.revparse_single(ref)
-            commit_tree = commit.tree
+            commit_tree = repo.repo.revparse_single(ref).tree
         except KeyError:
-            return self
-        if not self:
-            repo.repo.checkout_tree(commit_tree, strategy=1, directory=str(repo.wd))
-            repo.idx.read()
             return repo
 
-        for relative in self.relative_to(repo.wd, as_string=True):
-            repo.repo.checkout_tree(
-                commit_tree, strategy=1, paths=relative, directory=str(repo.wd)
-            )
+        paths = list(self.relative_to(repo.wd, as_string=True)) if self else None
+        repo.repo.checkout_tree(
+            commit_tree, strategy=1, paths=paths, directory=str(repo.wd)
+        )
         repo.idx.read()
         return repo
 
-    def remove_from(self, repo: RepoModel, staged_only: bool = True):
+    def remove_from(self, repo: "RepoModel", staged_only: bool = True):
+        """Remove all files in StageModel or just staged files"""
         if self:
             for relative_path in self.relative_to(repo.wd):
                 if str(relative_path) in repo.idx:
@@ -71,14 +67,17 @@ class RepoModel:
 
     @property
     def wd(self):
+        """Give the workdir path resolved as PathLike"""
         return Path(self.repo.workdir).resolve()
 
     @property
     def idx(self):
+        """Give the Index of RepoModel"""
         return self.repo.index
 
     @property
     def repo(self) -> Repository:
+        """Give the Repository object of the RepoModel"""
         return getattr(self, "_repo", Repository())
 
     @repo.setter
@@ -102,14 +101,17 @@ class CommitModel:
 
     @property
     def message(self) -> str:
+        """Message of the CommitModel: default will be empty string"""
         return getattr(self, "_message", "")
 
     @property
     def parents(self) -> list[Commit]:
+        """Parents is a list of Commit: default return empty list"""
         return getattr(self, "_parents", [])
 
     @property
     def ref(self) -> str:
+        """Repo reference: default HEAD"""
         return getattr(self, "_ref", "HEAD")
 
     @message.setter
@@ -123,7 +125,7 @@ class CommitModel:
         if not isinstance(value, list):
             raise TypeError("parents must be <list[Commit]>")
 
-        if not all(True if isinstance(v, Commit) else False for v in value):
+        if not all(isinstance(v, Commit) for v in value):
             raise TypeError("parents must be <list[Commit]>")
 
         self._parents = value
@@ -134,12 +136,14 @@ class CommitModel:
             raise TypeError("ref must be <str>")
         self._ref = value
 
-    def apply(self, repo: RepoModel, files: StageModel, autoadd: bool = True):
+    def apply(self, repo: RepoModel, files: StageModel | None, autoadd: bool = True):
+        """Apply the CommitModel to the given RepoModel"""
         if files is not None:
             repo = files.add_to(repo)
         else:
             if autoadd:
                 repo.idx.add_all()
+                repo.idx.write()
         tree_oid = repo.idx.write_tree()
         if len(self.parents) == 0:
             try:
