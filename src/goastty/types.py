@@ -1,15 +1,15 @@
 import asyncio
 import os
-from copy import copy, deepcopy
+from copy import deepcopy
 from pathlib import Path
-from typing import Iterable, Self
+from typing import Self
 
-from ._errors import ExecutionError
+from goastty.error.execution import ExecutionError
 
 if os.name == "nt":
-    from ._platform import ntapi as _platform
+    from .core import ntapi as core
 else:
-    from ._platform import posixapi as _platform
+    from .core import posixapi as core
 
 # ==========================================================================
 # Structures
@@ -47,15 +47,15 @@ class Handle:
         """Destroy resource context on native system operational layer"""
         if not self._closed and self.fd != -1:
             self._closed = True
-            _platform.close(self.fd)
+            core.close(self.fd)
 
     def read(self, buffer_size: int = 4096) -> tuple[bytes, int | None]:
         """Consume data block from active channel descriptor"""
-        return _platform.read(self.fd, buffer_size)
+        return core.read(self.fd, buffer_size)
 
     def sync_waitpid(self, options: int = 0) -> tuple["Handle", int]:
         """Verify tracking target process execution state once"""
-        pid, status = _platform.waitpid(self.fd, options)
+        pid, status = core.waitpid(self.fd, options)
         if pid != 0:
             self._completed = True
         return Handle(pid), status
@@ -76,7 +76,7 @@ class Handle:
 
 
 class Buffer(bytearray):
-    """_platform internal extensible I/O data cache container"""
+    """core internal extensible I/O data cache container"""
 
     def __init__(self, package: bytes | None = None) -> None:
         super().__init__()
@@ -106,7 +106,7 @@ class Buffer(bytearray):
         else:
             fd = int(handle_or_descriptor)
             while True:
-                raw, _ = _platform.read(fd, buffer_size)
+                raw, _ = core.read(fd, buffer_size)
                 if not raw:
                     break
                 self.extend(raw)
@@ -115,7 +115,7 @@ class Buffer(bytearray):
             if is_handle:
                 handle_or_descriptor.close()
             else:
-                _platform.close(int(handle_or_descriptor))
+                core.close(int(handle_or_descriptor))
 
     async def async_read(
         self,
@@ -138,9 +138,7 @@ class Buffer(bytearray):
         else:
             fd = int(handle_or_descriptor)
             while True:
-                raw, _ = await loop.run_in_executor(
-                    None, _platform.read, fd, buffer_size
-                )
+                raw, _ = await loop.run_in_executor(None, core.read, fd, buffer_size)
                 if not raw:
                     break
                 self.extend(raw)
@@ -149,7 +147,7 @@ class Buffer(bytearray):
             if is_handle:
                 handle_or_descriptor.close()
             else:
-                _platform.close(int(handle_or_descriptor))
+                core.close(int(handle_or_descriptor))
 
 
 class Collector(dict):
@@ -189,7 +187,7 @@ class Task(list):
     def __init__(self, cmd: str | Path, *args: str) -> None:
         """Initialize core argument list payload"""
         self.data = Collector()
-        self.config = _platform.StartUpInfo()
+        self.config = core.StartUpInfo()
 
         # eliminate _build_ to keep init clean and direct
         if all(isinstance(arg, str) for arg in args):
@@ -253,12 +251,12 @@ class Gateway:
     """Process state boundary and low-level IO descriptor keeper"""
 
     def __init__(self, get_stderr: bool = False) -> None:
-        _out_r, _out_w = _platform.pipe()
+        _out_r, _out_w = core.pipe()
         self.stdout_reader = Handle(_out_r)
         self.stdout_writer = Handle(_out_w)
 
         if get_stderr:
-            _err_r, _err_w = _platform.pipe()
+            _err_r, _err_w = core.pipe()
             self.stderr_reader = Handle(_err_r)
             self.stderr_writer = Handle(_err_w)
 

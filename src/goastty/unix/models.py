@@ -1,8 +1,58 @@
 import re
 import shutil
+import struct
 from pathlib import Path
 
 from goastty import SyncExecution, SyncTask
+
+
+class ObjectSocketPayload:
+    FORMAT = ""
+    FIRST = b""
+
+    def __init__(self, payload_type: int, payload_value: str) -> None:
+        self._type = payload_type
+        self._value = payload_value
+
+    @property
+    def header(self) -> bytes:
+        return struct.pack(self.FORMAT, self.FIRST, len(self), int(self))
+
+    def __len__(self) -> int:
+        return len(bytes(self))
+
+    def __int__(self) -> int:
+        return self._type
+
+    def __bytes__(self) -> bytes:
+        return self._value.encode("utf-8")
+
+
+class ObjectCPUData:
+    def __init__(self, data: str) -> None:
+        self._value = data
+
+    def __str__(self) -> str:
+        return self._value
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
+
+class ObjectMemData:
+    def __init__(self, data: str) -> None:
+        value, _, ext = data.partition(" ")
+        self._value = int(value)
+        self._ext = ext if ext else None
+
+    def __int__(self) -> int:
+        return self._value
+
+    def __str__(self) -> str:
+        return f"{self._value} {self._ext}" if self._ext else str(self._value)
+
+    def __repr__(self) -> str:
+        return self.__str__()
 
 
 class ObjectScript:
@@ -38,7 +88,7 @@ class ObjectColor:
         self.r, self.g, self.b, self.a = self._parse(value.strip())
 
     def _parse(self, val: str) -> tuple:
-        """Normaliza qualquer formato de entrada para canais inteiros e alpha float."""
+        """Normalize color to rgba float."""
         if val.startswith("#"):
             c = val[1:]
             if len(c) in (3, 4):
@@ -58,7 +108,7 @@ class ObjectColor:
         return 0, 0, 0, 1.0
 
     def to(self, form="hex") -> str:
-        """Converte de forma automática para o formato desejado."""
+        """Automatically convert to any color format."""
         if form == "hex":
             return f"#{self.r:02x}{self.g:02x}{self.b:02x}"
         if form == "alpha_hex":

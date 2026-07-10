@@ -1,12 +1,9 @@
 import os
 
-from . import execution, types
-from .types import _platform as platform
+from . import execution, types, unix
+from .types import core
 
-__all__ = [
-    "execution",
-    "types",
-]
+__all__ = ["execution", "types", "unix"]
 
 
 # ==========================================================================
@@ -17,7 +14,7 @@ __all__ = [
 def exec_sync(
     cmd: str | execution.Path,
     args: list[str],
-    config: platform.StartUpInfo = platform.StartUpInfo(),
+    config: core.StartUpInfo = core.StartUpInfo(),
     get_err: bool = False,
 ) -> tuple[int, types.Buffer]:
     """Execute and consume system stream processing to termination sequentially"""
@@ -42,7 +39,7 @@ def exec_sync(
 async def exec_async(
     cmd: str | execution.Path,
     args: list[str],
-    config: platform.StartUpInfo = platform.StartUpInfo(),
+    config: core.StartUpInfo = core.StartUpInfo(),
     get_err: bool = False,
 ) -> tuple[int, types.Buffer]:
     """Execute and consume system stream processing via non-blocking pool loop"""

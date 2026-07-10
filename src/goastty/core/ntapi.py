@@ -46,12 +46,22 @@ if os.name == "nt":
             return b"", None
 
     def spawn(cmd: str | Path, args: list[str], si: StartUpInfo) -> tuple[int, int]:
-        """NT spawn process"""
+        """NT spawn process via Win32 CreateProcess API."""
         cmd_line = f'"{cmd}" ' + " ".join(f'"{a}"' if " " in a else a for a in args)
-        cwd = si.get("pCwdDir", None)
-        environment = si.get("hDefEnv", None)
-        hp, ht, pid, _ = win.CreateProcess(
-            None, cmd_line, None, None, True, 0, environment, cwd, si
-        )
-        close(ht)
-        return pid, hp
+
+        try:
+            hp, ht, pid, _ = win.CreateProcess(
+                None,
+                cmd_line,
+                None,
+                None,
+                True,
+                0,
+                si.get("hDefEnv"),
+                si.get("pCwdDir"),
+                si,
+            )
+            close(ht)
+            return pid, hp
+        except OSError:
+            return 0, 0

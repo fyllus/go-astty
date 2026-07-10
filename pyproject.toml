@@ -21,6 +21,12 @@ dependencies = [
     "pygit2>=1.14.0",
 ]
 license = { text = "MIT" }
+Pyproject file parse attempt 4 Error: Invalid TOML document: trying to redefine an already defined table or value
+
+18:  ]
+19:  requires-python = ">=3.14"
+     ^
+20:  dependencies = [
 
 [project.urls]
 Codeberg = "https://codeberg.org/Fyllus/go-astty"

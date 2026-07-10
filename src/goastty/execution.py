@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from goastty.types import Gateway, Handle, Task, _platform
+from goastty.types import Gateway, Handle, Task, core
 
 # ==========================================================================
 # Execution Core
@@ -9,17 +9,17 @@ from goastty.types import Gateway, Handle, Task, _platform
 
 
 def init_startup(
-    get_err: bool = False, config: _platform.StartUpInfo | None = None
-) -> _platform.StartUpInfo:
-    """Aloca canais e acopla descritores de escrita e leitura no StartUpInfo"""
-    cfg = config if config is not None else _platform.StartUpInfo()
+    get_err: bool = False, config: core.StartUpInfo | None = None
+) -> core.StartUpInfo:
+    """Alocate channels and connect reader and writer descriptors to STARTUPINFO"""
+    cfg = config if config is not None else core.StartUpInfo()
 
-    stdout_r, stdout_w = _platform.pipe()
+    stdout_r, stdout_w = core.pipe()
     cfg["hStdOutput"] = stdout_w
     cfg["hReaderOutput"] = stdout_r
 
     if get_err:
-        stderr_r, stderr_w = _platform.pipe()
+        stderr_r, stderr_w = core.pipe()
         cfg["hStdError"] = stderr_w
         cfg["hReaderError"] = stderr_r
     else:
@@ -29,11 +29,11 @@ def init_startup(
     return cfg
 
 
-def post_startup(cmd: str | Path, args: list[str], config: _platform.StartUpInfo):
-    _pid, _handle = _platform.spawn(cmd, args, config)
-    _platform.close(config["hStdOutput"])
+def post_startup(cmd: str | Path, args: list[str], config: core.StartUpInfo):
+    _pid, _handle = core.spawn(cmd, args, config)
+    core.close(config["hStdOutput"])
     if config["hStdOutput"] != config["hStdError"]:
-        _platform.close(config["hStdError"])
+        core.close(config["hStdError"])
     return _pid, _handle
 
 
@@ -59,7 +59,7 @@ class Execution:
         if get_stderr:
             self.task.config["hStdError"] = _gateway.stderr_writer
 
-        _pid, _hp = _platform.spawn(self.task.cmd(), self.task.args(), self.task.config)
+        _pid, _hp = core.spawn(self.task.cmd(), self.task.args(), self.task.config)
 
         _gateway.stdout_writer.close()
         if get_stderr:

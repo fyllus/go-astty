@@ -3,10 +3,10 @@ import os
 import pwd
 from pathlib import Path
 
-from goastty.liblinux.models import ObjectScript, ObjectShell
+from goastty.unix.models import ObjectScript, ObjectShell
 
 
-def group_exists(group: str) -> bool:
+def group_name_exists(group: str) -> bool:
     try:
         grp.getgrnam(group)
         return True
@@ -14,8 +14,8 @@ def group_exists(group: str) -> bool:
         return False
 
 
-def curr_user_is_in_group(group: str) -> bool:
-    if not group_exists(group):
+def is_curr_user_in_group(group: str) -> bool:
+    if not group_name_exists(group):
         return False
 
     target_gid = grp.getgrnam(group).gr_gid
@@ -38,7 +38,7 @@ def is_path_in_group(group_path="", group_name="", is_dir=True):
     if is_dir and not dir_path.is_dir():
         return False
 
-    if not group_exists(group_name):
+    if not group_name_exists(group_name):
         return False
 
     target_gid = grp.getgrnam(group_name).gr_gid
@@ -50,7 +50,7 @@ def create_group(
     group_name="", group_path="", write=True, user="", recursive=True
 ) -> bool:
     script = []
-    if not group_exists(group_name):
+    if not group_name_exists(group_name):
         script.append(f"sudo groupadd {group_name}")
 
     if not is_path_in_group(group_path, group_name, recursive):
@@ -63,7 +63,7 @@ def create_group(
         )
 
     user = user if user else pwd.getpwuid(os.getuid()).pw_name
-    if not curr_user_is_in_group(group_name):
+    if not is_curr_user_in_group(group_name):
         script.append(f"sudo usermod -aG {group_name} {user}")
 
     if len(script) == 0:
@@ -77,40 +77,3 @@ def create_group(
             return False
         else:
             return True
-
-
-print(create_group(group_name="user-level", group_path="$HOME/wayblue", write=True))
-
-
-"""
-📂 ~
- ❯ echo 4000 > /sys/class/backlight/intel_backlight/brightness
-
- 📂 ~
- ❯ /sys/class/backlight/intel_backlight/
-device/    power/     subsystem/
-
- 📂 ~
- ❯ ls /sys/class/backlight/intel_backlight
-actual_brightness  bl_power  brightness  device  max_brightness  power	scale  subsystem  type	uevent
-
- 📂 ~
- ❯ ls /sys/class/backlight/intel_backlight/max_brightness
-/sys/class/backlight/intel_backlight/max_brightness
-
- 📂 ~
- ❯ ls /sys/class/backlight/intel_backlight/max_brightness
-/sys/class/backlight/intel_backlight/max_brightness
-
- 📂 ~
- ❯ ls /sys/class/backlight/intel_backlight/max_brightness
-/sys/class/backlight/intel_backlight/max_brightness
-
- 📂 ~
- ❯ cat /sys/class/backlight/intel_backlight/max_brightness
-19200
-
- 📂 ~
- ❯
-
-"""
