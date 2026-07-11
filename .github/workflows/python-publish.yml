@@ -3,7 +3,7 @@ name: Upload Python Package
 on:
   push:
     tags:
-      - 'v*.*.*'  # Dispara apenas quando você envia uma tag (ex: v0.1.0)
+      - 'v*.*.*' 
 
 permissions:
   contents: read
@@ -36,7 +36,7 @@ jobs:
     permissions:
       id-token: write  
     environment:
-      name: pypi
+      name: pypi-go-astty-man
     steps:
       - name: Retrieve release distributions
         uses: actions/download-artifact@v4
