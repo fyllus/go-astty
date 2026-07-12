@@ -1,6 +1,6 @@
 # Go-astty
 
-Version: `0.3.8` : Optimized performance by eliminating redundancies and improving vital components.
+Version: `0.4.0` : Optimized performance by eliminating redundancies and improving vital components.
 
 `go-astty` (Gate of Asynchronous and Synchronous TTY) is a minimalist, ultra-high-performance process orchestration layer for seamless synchronous and asynchronous command-line executions in Python.
 
