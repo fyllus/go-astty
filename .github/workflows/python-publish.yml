@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*.*.*'
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -12,7 +14,7 @@ jobs:
   release-build:
     runs-on: ubuntu-latest
     
-    if: github.ref_type == 'tag' && github.event.base_ref == 'refs/heads/main'
+    #if: github.ref_type == 'tag' && github.event.base_ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
 
