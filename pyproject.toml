@@ -7,8 +7,11 @@ name = "go-astty"
 version = "0.4.0"
 description = "go-astty is modular process orchestration gate for seamless synchronous and asynchronous command-line executions in Python."
 readme = "README.md"
+
 authors = [{name = "Fyllus", email = "fylluszophia@proton.me"}]
+
 keywords = ["shell", "command", "terminal", "subprocess", "tty", "cli", "async", ""]
+
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -17,9 +20,9 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 requires-python = ">=3.14"
-dependencies = [
-    "pygit2>=1.14.0",
-]
+
+dependencies = [""]
+
 license = { text = "MIT" }
 
 [project.urls]
