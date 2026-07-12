@@ -2,7 +2,7 @@ from pathlib import Path
 
 from pygit2 import GitError, Repository
 
-from goastty.git import errors
+from goastty.error import git
 
 
 def open_repository(repo: Path | Repository):
@@ -11,13 +11,13 @@ def open_repository(repo: Path | Repository):
     if isinstance(repo, Repository):
         return repo
     if not isinstance(repo, Path):
-        raise errors.GitRepoError(
+        raise git.GitRepoError(
             f"Invalid repository type <{type(repo).__name__}>, expected <RepositoryOrPath>"
         )
     try:
         return Repository(str(repo))
     except KeyError, GitError:
-        raise errors.GitRepoError("Not a valid repository inited.")
+        raise git.GitRepoError("Not a valid repository inited.")
 
 
 def is_git_repository(path: Path) -> bool:
@@ -25,5 +25,5 @@ def is_git_repository(path: Path) -> bool:
     try:
         open_repository(repo=path)
         return True
-    except errors.GitRepoError:
+    except git.GitRepoError:
         return False
