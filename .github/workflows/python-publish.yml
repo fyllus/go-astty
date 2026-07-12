@@ -3,7 +3,7 @@ name: Upload Python Package
 on:
   push:
     tags:
-      - 'v*.*.*' 
+      - 'v*.*.*'
 
 permissions:
   contents: read
@@ -11,6 +11,8 @@ permissions:
 jobs:
   release-build:
     runs-on: ubuntu-latest
+    
+    if: github.ref_type == 'tag' && github.event.base_ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
 
