@@ -8,6 +8,8 @@ from goastty import (
     SyncExecution,
     SyncTask,
 )
+print()
+from logging
 
 # Benchmark configuration
 ITERATIONS = 1000
